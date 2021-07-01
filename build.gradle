@@ -2,6 +2,9 @@ import com.android.build.gradle.BasePlugin
 import org.gradle.api.plugins.JavaPlugin
 import org.jetbrains.kotlin.gradle.dsl.KotlinCompile
 
+import org.gradle.internal.jvm.Jvm
+import org.jetbrains.kotlin.gradle.dsl.KotlinCompile
+
 buildscript {
     ext {
         // Judging the impact of newer library versions on the app requires being intimately familiar with the code
@@ -72,6 +75,8 @@ buildscript {
         classpath "org.jlleitschuh.gradle:ktlint-gradle:11.0.0"
     }
 }
+
+println "Gradle uses Java ${Jvm.current()}"
 
 project.ext {
     testCoverage = project.hasProperty('testCoverage')
@@ -158,9 +163,46 @@ allprojects {
     }
 }
 
+@SuppressWarnings('unused')
+static def getTag() {
+    def tagVersion = "$System.env.VERSION"
+    if (tagVersion == "null") {
+        // with local un-commited changes a -DIRTY is added
+        def processChanges = "git diff-index --name-only HEAD --".execute()
+        def dirty = ""
+        if (!processChanges.text.toString().trim().isEmpty())
+            dirty = "-DIRTY"
+
+        def process = "git describe --tags".execute()
+        tagVersion = process.text.toString().trim() + dirty
+    } else {
+        def tagVersionToken = tagVersion.split("/")
+        if (tagVersionToken.size() > 2)
+            tagVersion = tagVersionToken[2]
+        else
+            tagVersion = tagVersionToken[0]
+    }
+    return tagVersion
+}
+
+@SuppressWarnings('unused')
+static def getGitCommitCount() {
+    def process = "git rev-list HEAD --count".execute()
+    return process.text.toInteger()
+}
+
+@SuppressWarnings('unused')
+static def getGitOriginRemote() {
+    def process = "git remote -v".execute()
+    def values = process.text.toString().trim().split("\\r\\n|\\n|\\r")
+
+    def found = values.find { it.startsWith("origin") && it.endsWith("(push)") }
+    return found.replace("origin", "").replace("(push)", "").replace(".git", "").trim()
+}
+
 tasks.register('testsOnCi') {
     dependsOn getSubprojects()
-            .collect { project -> project.tasks.withType(Test) }
-            .flatten()
-            .findAll { task -> task.name in ['testDebugUnitTest', 'test'] }
+        .collect { project -> project.tasks.withType(Test) }
+        .flatten()
+        .findAll { task -> task.name in ['testDebugUnitTest', 'test'] }
 }

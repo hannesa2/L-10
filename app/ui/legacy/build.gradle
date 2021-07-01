@@ -16,6 +16,7 @@ dependencies {
 
     implementation project(':plugins:openpgp-api-lib:openpgp-api')
 
+    implementation 'com.github.hannesa2:githubAppUpdate:2.0'
     implementation "androidx.appcompat:appcompat:${versions.androidxAppCompat}"
     implementation "androidx.preference:preference:${versions.androidxPreference}"
     implementation "com.takisoft.preferencex:preferencex:${versions.preferencesFix}"
@@ -74,6 +75,11 @@ android {
 
     buildFeatures {
         buildConfig true
+    }
+
+    defaultConfig {
+        buildConfigField "String", 'GIT_REPOSITORY', "\"" + getGitOriginRemote() + "\""
+        buildConfigField "String", 'VERSIONNAME', "\"" + getTag() + "\""
     }
 
     buildTypes {
