@@ -53,8 +53,8 @@ android {
         applicationId "com.fsck.k9"
         testApplicationId "com.fsck.k9.tests"
 
-        versionCode 35003
-        versionName '6.503'
+        versionCode getGitCommitCount()
+        versionName getTag()
 
         // Keep in sync with the resource string array 'supported_languages'
         resConfigs "in", "br", "ca", "cs", "cy", "da", "de", "et", "en", "en_GB", "es", "eo", "eu", "fr", "gd", "gl",
@@ -68,7 +68,18 @@ android {
     }
 
     signingConfigs {
-        release
+        release {
+            storeFile file('../signing/release.keystore')
+            storePassword System.getenv("KEYSTORE_PASS")
+            keyAlias System.getenv("ALIAS_NAME")
+            keyPassword System.getenv("ALIAS_PASS")
+        }
+        debugCI {
+            storeFile file('./debug.keystore')
+            storePassword "android"
+            keyPassword "android"
+            keyAlias "androiddebugkey"
+        }
     }
 
     compileOptions {
@@ -77,8 +88,17 @@ android {
 
     buildTypes {
         release {
-            if (project.hasProperty('storeFile')) {
-                signingConfig signingConfigs.release
+            if (file('../signing/release.keystore').exists()) {
+                if (System.getenv("KEYSTORE_PASS") == null || System.getenv("ALIAS_NAME") == null || System.getenv("ALIAS_PASS") == null) {
+                    println "Keystore exists, but I use DEBUG signing because variables are not set !"
+                    signingConfig signingConfigs.debug
+                } else {
+                    println "Keystore exists and I use RELEASE signing"
+                    signingConfig signingConfigs.release
+                }
+            } else {
+                println "I run somewhere else and I use debug signing"
+                signingConfig signingConfigs.debug
             }
 
             minifyEnabled true
@@ -106,6 +126,10 @@ android {
             buildConfigField "String", "OAUTH_MICROSOFT_REDIRECT_URI", "\"msauth://com.fsck.k9.debug/VZF2DYuLYAu4TurFd6usQB2JPts%3D\""
 
             manifestPlaceholders = ['appAuthRedirectScheme': 'com.fsck.k9.debug']
+
+            if (System.getenv("CI") == "true") { // Github action
+                signingConfig signingConfigs.debugCI
+            }
         }
     }
 
@@ -141,17 +165,4 @@ android {
         includeInApk = false
         includeInBundle = false
     }
-}
-
-if (project.hasProperty('keyAlias')) {
-    android.signingConfigs.release.keyAlias = keyAlias
-}
-if (project.hasProperty('keyPassword')) {
-    android.signingConfigs.release.keyPassword = keyPassword
-}
-if (project.hasProperty('storeFile')) {
-    android.signingConfigs.release.storeFile = file(storeFile)
-}
-if (project.hasProperty('storePassword')) {
-    android.signingConfigs.release.storePassword = storePassword
 }
