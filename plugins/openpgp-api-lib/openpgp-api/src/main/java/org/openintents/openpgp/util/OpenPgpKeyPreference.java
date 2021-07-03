@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The K-9 Dog Walkers
+ * Copyright (C) 2018 The L-10 Dog Walkers
  * Copyright (C) 2015 Dominik Schürmann <dominik@dominikschuermann.de>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
