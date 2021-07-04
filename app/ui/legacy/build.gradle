@@ -53,6 +53,9 @@ dependencies {
     implementation libs.kotlinx.coroutines.core
     implementation libs.kotlinx.coroutines.android
 
+    implementation "com.github.AppDevNext.Logcat:LogcatCoreLib:2.12"
+    implementation "com.github.AppDevNext.Logcat:LogcatCoreUI:2.12"
+
     implementation libs.glide
     annotationProcessor libs.glide.compiler
 

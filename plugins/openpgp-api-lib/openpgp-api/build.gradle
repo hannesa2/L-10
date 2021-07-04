@@ -14,4 +14,6 @@ dependencies {
     implementation libs.androidx.lifecycle.common
     implementation libs.timber
     implementation libs.preferencex
+
+    implementation "com.github.AppDevNext.Logcat:LogcatCoreLib:2.12"
 }

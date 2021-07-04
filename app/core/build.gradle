@@ -27,6 +27,8 @@ dependencies {
     implementation libs.mime4j.core
     implementation libs.mime4j.dom
 
+    implementation "com.github.AppDevNext.Logcat:LogcatCoreLib:2.12"
+
     testImplementation project(':mail:testing')
     testImplementation project(":backend:imap")
     testImplementation project(":mail:protocols:smtp")
