@@ -8,7 +8,7 @@ dependencies {
     implementation project(":mail:common")
     implementation project(":app:autodiscovery:api")
 
-    implementation libs.timber
+    implementation "com.github.AppDevNext.Logcat:LogcatCoreLib:2.12"
 
     testImplementation project(':app:testing')
     testImplementation project(":backend:imap")

@@ -17,6 +17,8 @@ dependencies {
     implementation libs.kotlinx.coroutines.core
     implementation libs.kotlinx.coroutines.android
 
+    implementation "com.github.AppDevNext.Logcat:LogcatCoreLib:2.12"
+
     testImplementation project(':mail:testing')
     testImplementation project(':app:testing')
     testImplementation libs.robolectric
