@@ -19,7 +19,7 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew assembleDebug testDebugUnitTest
       - name: Android monkeyrunner ${{ matrix.api }}
-        uses: ReactiveCircus/android-emulator-runner@v2.19.0
+        uses: ReactiveCircus/android-emulator-runner@v2.27.0
         with:
           api-level: ${{ matrix.api }}
           disable-animations: true
