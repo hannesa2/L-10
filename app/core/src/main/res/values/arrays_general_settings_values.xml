@@ -17,6 +17,7 @@
         <item>eo</item>
         <item>eu</item>
         <item>fr</item>
+        <item>fy</item>
         <item>gd</item>
         <item>gl</item>
         <item>hr</item>
@@ -75,6 +76,7 @@
         <item>ee</item>
         <item>fr</item>
         <item>fr_CA</item>
+        <item>fy</item>
         <item>ff</item>
         <item>ga</item>
         <item>gd</item>
@@ -99,7 +101,6 @@
         <item>pl</item>
         <item>pt_PT</item>
         <item>pt_BR</item>
-        <item>ru</item>
         <item>ro</item>
         <item>sq</item>
         <item>sk</item>
@@ -118,6 +119,7 @@
         <item>ky</item>
         <item>kk</item>
         <item>mk</item>
+        <item>ru</item>
         <item>sr</item>
         <item>uk</item>
         <item>hy</item>
@@ -171,12 +173,6 @@
         <item>6</item>
     </string-array>
 
-    <string-array name="notification_hide_subject_values" translatable="false">
-        <item name="1">NEVER</item>
-        <item name="2">WHEN_LOCKED</item>
-        <item name="3">ALWAYS</item>
-    </string-array>
-
     <string-array name="notification_quick_delete_values" translatable="false">
         <item name="1">NEVER</item>
         <item name="2">FOR_SINGLE_MSG</item>
@@ -214,9 +210,15 @@
         <item>spam</item>
     </string-array>
 
-    <string-array name="volume_navigation_values" translatable="false">
-        <item>message</item>
-        <item>list</item>
+    <string-array name="swipe_action_values" translatable="false">
+        <item>none</item>
+        <item>toggle_selection</item>
+        <item>toggle_read</item>
+        <item>toggle_star</item>
+        <item>archive</item>
+        <item>delete</item>
+        <item>spam</item>
+        <item>move</item>
     </string-array>
 
 </resources>

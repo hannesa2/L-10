@@ -18,7 +18,7 @@ import org.mockito.kotlin.verifyNoMoreInteractions
 import org.robolectric.RuntimeEnvironment
 
 class StoragePersisterTest : K9RobolectricTest() {
-    private var context: Context = RuntimeEnvironment.application
+    private var context: Context = RuntimeEnvironment.getApplication()
     private var storagePersister = K9StoragePersister(context)
 
     @Test
@@ -46,7 +46,7 @@ class StoragePersisterTest : K9RobolectricTest() {
 
         storagePersister.doInTransaction(operationCallback)
 
-        val values = storagePersister.loadValues()
+        val values = storagePersister.loadValues().all
         assertEquals(1, values.size)
         assertEquals("y", values["x"])
     }

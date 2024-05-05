@@ -1,8 +1,8 @@
 package com.fsck.k9.backend.imap
 
-import com.fsck.k9.mail.store.imap.ImapFolder
+import com.fsck.k9.logging.Timber
 import com.fsck.k9.mail.store.imap.ImapStore
-import timber.log.Timber
+import com.fsck.k9.mail.store.imap.OpenMode
 
 internal class CommandExpunge(private val imapStore: ImapStore) {
 
@@ -13,8 +13,8 @@ internal class CommandExpunge(private val imapStore: ImapStore) {
         try {
             if (!remoteFolder.exists()) return
 
-            remoteFolder.open(ImapFolder.OPEN_MODE_RW)
-            if (remoteFolder.mode != ImapFolder.OPEN_MODE_RW) return
+            remoteFolder.open(OpenMode.READ_WRITE)
+            if (remoteFolder.mode != OpenMode.READ_WRITE) return
 
             remoteFolder.expunge()
 
@@ -29,8 +29,8 @@ internal class CommandExpunge(private val imapStore: ImapStore) {
         try {
             if (!remoteFolder.exists()) return
 
-            remoteFolder.open(ImapFolder.OPEN_MODE_RW)
-            if (remoteFolder.mode != ImapFolder.OPEN_MODE_RW) return
+            remoteFolder.open(OpenMode.READ_WRITE)
+            if (remoteFolder.mode != OpenMode.READ_WRITE) return
 
             remoteFolder.expungeUids(messageServerIds)
         } finally {

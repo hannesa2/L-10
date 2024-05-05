@@ -9,11 +9,13 @@ import com.fsck.k9.mailstore.CreateFolderInfo
 import com.fsck.k9.mailstore.FolderDetails
 import com.fsck.k9.mailstore.FolderMapper
 import com.fsck.k9.mailstore.LockableDatabase
+import com.fsck.k9.mailstore.MessageMapper
 import com.fsck.k9.mailstore.MessageStore
 import com.fsck.k9.mailstore.MoreMessages
 import com.fsck.k9.mailstore.SaveMessageData
 import com.fsck.k9.mailstore.StorageManager
 import com.fsck.k9.message.extractors.BasicPartInfoExtractor
+import com.fsck.k9.search.ConditionsTreeNode
 import java.util.Date
 
 class K9MessageStore(
@@ -33,13 +35,17 @@ class K9MessageStore(
     private val copyMessageOperations = CopyMessageOperations(database, attachmentFileManager, threadMessageOperations)
     private val moveMessageOperations = MoveMessageOperations(database, threadMessageOperations)
     private val flagMessageOperations = FlagMessageOperations(database)
+    private val updateMessageOperations = UpdateMessageOperations(database)
     private val retrieveMessageOperations = RetrieveMessageOperations(database)
+    private val retrieveMessageListOperations = RetrieveMessageListOperations(database)
     private val deleteMessageOperations = DeleteMessageOperations(database, attachmentFileManager)
     private val createFolderOperations = CreateFolderOperations(database)
     private val retrieveFolderOperations = RetrieveFolderOperations(database)
+    private val checkFolderOperations = CheckFolderOperations(database)
     private val updateFolderOperations = UpdateFolderOperations(database)
     private val deleteFolderOperations = DeleteFolderOperations(database, attachmentFileManager)
     private val keyValueStoreOperations = KeyValueStoreOperations(database)
+    private val databaseOperations = DatabaseOperations(database, storageManager, accountUuid)
 
     override fun saveRemoteMessage(folderId: Long, messageServerId: String, messageData: SaveMessageData) {
         saveMessageOperations.saveRemoteMessage(folderId, messageServerId, messageData)
@@ -65,7 +71,15 @@ class K9MessageStore(
         flagMessageOperations.setMessageFlag(folderId, messageServerId, flag, set)
     }
 
-    override fun getMessageServerId(messageId: Long): String {
+    override fun setNewMessageState(folderId: Long, messageServerId: String, newMessage: Boolean) {
+        updateMessageOperations.setNewMessageState(folderId, messageServerId, newMessage)
+    }
+
+    override fun clearNewMessageState() {
+        updateMessageOperations.clearNewMessageState()
+    }
+
+    override fun getMessageServerId(messageId: Long): String? {
         return retrieveMessageOperations.getMessageServerId(messageId)
     }
 
@@ -89,6 +103,28 @@ class K9MessageStore(
         return retrieveMessageOperations.getAllMessagesAndEffectiveDates(folderId)
     }
 
+    override fun <T> getMessages(
+        selection: String,
+        selectionArgs: Array<String>,
+        sortOrder: String,
+        messageMapper: MessageMapper<out T?>
+    ): List<T> {
+        return retrieveMessageListOperations.getMessages(selection, selectionArgs, sortOrder, messageMapper)
+    }
+
+    override fun <T> getThreadedMessages(
+        selection: String,
+        selectionArgs: Array<String>,
+        sortOrder: String,
+        messageMapper: MessageMapper<out T?>
+    ): List<T> {
+        return retrieveMessageListOperations.getThreadedMessages(selection, selectionArgs, sortOrder, messageMapper)
+    }
+
+    override fun <T> getThread(threadId: Long, sortOrder: String, messageMapper: MessageMapper<out T?>): List<T> {
+        return retrieveMessageListOperations.getThread(threadId, sortOrder, messageMapper)
+    }
+
     override fun getOldestMessageDate(folderId: Long): Date? {
         return retrieveMessageOperations.getOldestMessageDate(folderId)
     }
@@ -97,8 +133,8 @@ class K9MessageStore(
         return retrieveMessageOperations.getHeaders(folderId, messageServerId)
     }
 
-    override fun getLastUid(folderId: Long): Long? {
-        return retrieveMessageOperations.getLastUid(folderId)
+    override fun getHeaders(folderId: Long, messageServerId: String, headerNames: Set<String>): List<Header> {
+        return retrieveMessageOperations.getHeaders(folderId, messageServerId, headerNames)
     }
 
     override fun destroyMessages(folderId: Long, messageServerIds: Collection<String>) {
@@ -129,8 +165,36 @@ class K9MessageStore(
         return retrieveFolderOperations.getDisplayFolders(displayMode, outboxFolderId, mapper)
     }
 
+    override fun areAllIncludedInUnifiedInbox(folderIds: Collection<Long>): Boolean {
+        return checkFolderOperations.areAllIncludedInUnifiedInbox(folderIds)
+    }
+
     override fun getFolderId(folderServerId: String): Long? {
         return retrieveFolderOperations.getFolderId(folderServerId)
+    }
+
+    override fun getFolderServerId(folderId: Long): String? {
+        return retrieveFolderOperations.getFolderServerId(folderId)
+    }
+
+    override fun getMessageCount(folderId: Long): Int {
+        return retrieveFolderOperations.getMessageCount(folderId)
+    }
+
+    override fun getUnreadMessageCount(folderId: Long): Int {
+        return retrieveFolderOperations.getUnreadMessageCount(folderId)
+    }
+
+    override fun getUnreadMessageCount(conditions: ConditionsTreeNode): Int {
+        return retrieveFolderOperations.getUnreadMessageCount(conditions)
+    }
+
+    override fun getStarredMessageCount(conditions: ConditionsTreeNode): Int {
+        return retrieveFolderOperations.getStarredMessageCount(conditions)
+    }
+
+    override fun getSize(): Long {
+        return databaseOperations.getSize()
     }
 
     override fun changeFolder(folderServerId: String, name: String, type: FolderType) {
@@ -153,20 +217,32 @@ class K9MessageStore(
         updateFolderOperations.setSyncClass(folderId, folderClass)
     }
 
+    override fun setPushClass(folderId: Long, folderClass: FolderClass) {
+        updateFolderOperations.setPushClass(folderId, folderClass)
+    }
+
     override fun setNotificationClass(folderId: Long, folderClass: FolderClass) {
         updateFolderOperations.setNotificationClass(folderId, folderClass)
+    }
+
+    override fun hasMoreMessages(folderId: Long): MoreMessages {
+        return retrieveFolderOperations.hasMoreMessages(folderId)
     }
 
     override fun setMoreMessages(folderId: Long, moreMessages: MoreMessages) {
         updateFolderOperations.setMoreMessages(folderId, moreMessages)
     }
 
-    override fun setLastUpdated(folderId: Long, timestamp: Long) {
-        updateFolderOperations.setLastUpdated(folderId, timestamp)
+    override fun setLastChecked(folderId: Long, timestamp: Long) {
+        updateFolderOperations.setLastChecked(folderId, timestamp)
     }
 
     override fun setStatus(folderId: Long, status: String?) {
         updateFolderOperations.setStatus(folderId, status)
+    }
+
+    override fun setVisibleLimit(folderId: Long, visibleLimit: Int) {
+        updateFolderOperations.setVisibleLimit(folderId, visibleLimit)
     }
 
     override fun deleteFolders(folderServerIds: List<String>) {
@@ -203,5 +279,9 @@ class K9MessageStore(
 
     override fun setFolderExtraNumber(folderId: Long, name: String, value: Long) {
         return keyValueStoreOperations.setFolderExtraNumber(folderId, name, value)
+    }
+
+    override fun compact() {
+        return databaseOperations.compact()
     }
 }

@@ -120,7 +120,7 @@ object MimeParameterEncoder {
 
     private fun String.rfc2231Encoded() = buildString {
         this@rfc2231Encoded.encodeUtf8 { byte ->
-            val c = byte.toChar()
+            val c = byte.toInt().toChar()
             if (c.isAttributeChar()) {
                 append(c)
             } else {
@@ -133,12 +133,12 @@ object MimeParameterEncoder {
     private fun String.rfc2231EncodedLength(): Int {
         var length = 0
         encodeUtf8 { byte ->
-            length += if (byte.toChar().isAttributeChar()) 1 else 3
+            length += if (byte.toInt().toChar().isAttributeChar()) 1 else 3
         }
         return length
     }
 
-    private fun String.isToken() = when {
+    fun String.isToken() = when {
         isEmpty() -> false
         else -> all { it.isTokenChar() }
     }
@@ -159,6 +159,22 @@ object MimeParameterEncoder {
                     append('\\').append(c)
                 } else {
                     throw IllegalArgumentException("Unsupported character: $c")
+                }
+            }
+            append(DQUOTE)
+        }
+    }
+
+    // RFC 6532-style header values
+    // Right now we only create such values for internal use (see IMAP BODYSTRUCTURE response parsing code)
+    fun String.quotedUtf8(): String {
+        return buildString(capacity = length + 16) {
+            append(DQUOTE)
+            for (c in this@quotedUtf8) {
+                if (c == DQUOTE || c == BACKSLASH) {
+                    append('\\').append(c)
+                } else {
+                    append(c)
                 }
             }
             append(DQUOTE)
@@ -186,7 +202,7 @@ object MimeParameterEncoder {
     }
 
     // RFC 5322: qtext = %d33 / %d35-91 / %d93-126 / obs-qtext
-    private fun Char.isQText() = when (toInt()) {
+    private fun Char.isQText() = when (code) {
         33 -> true
         in 35..91 -> true
         in 93..126 -> true

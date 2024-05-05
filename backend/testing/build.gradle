@@ -1,0 +1,12 @@
+plugins {
+    id 'java-library'
+    id 'kotlin'
+    alias(libs.plugins.android.lint)
+}
+
+dependencies {
+    implementation project(":backend:api")
+
+    implementation libs.okio
+    implementation libs.junit
+}

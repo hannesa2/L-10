@@ -1,32 +1,16 @@
-apply plugin: 'com.android.library'
-apply plugin: 'org.jetbrains.kotlin.android'
+plugins {
+    id 'java-library'
+    id 'kotlin'
+    alias(libs.plugins.android.lint)
+}
+
+if (rootProject.testCoverage) {
+    apply plugin: 'jacoco'
+}
 
 dependencies {
     api project(":mail:common")
 
-    api "com.squareup.okio:okio:${versions.okio}"
-    api "org.robolectric:robolectric:${versions.robolectric}"
-    api "junit:junit:${versions.junit}"
-}
-
-android {
-    compileSdkVersion buildConfig.compileSdk
-    buildToolsVersion buildConfig.buildTools
-
-    defaultConfig {
-        minSdkVersion buildConfig.minSdk
-    }
-
-    lintOptions {
-        abortOnError false
-    }
-
-    compileOptions {
-        sourceCompatibility javaVersion
-        targetCompatibility javaVersion
-    }
-
-    kotlinOptions {
-        jvmTarget = kotlinJvmVersion
-    }
+    api libs.okio
+    api libs.junit
 }

@@ -21,9 +21,9 @@ import com.fsck.k9.Account;
 import com.fsck.k9.Preferences;
 import com.fsck.k9.controller.MessagingController;
 import com.fsck.k9.controller.SimpleMessagingListener;
+import com.fsck.k9.helper.MimeTypeUtil;
 import com.fsck.k9.mail.Message;
 import com.fsck.k9.mail.Part;
-import com.fsck.k9.mail.internet.MimeUtility;
 import com.fsck.k9.mailstore.AttachmentViewInfo;
 import com.fsck.k9.mailstore.LocalMessage;
 import com.fsck.k9.mailstore.LocalPart;
@@ -40,9 +40,9 @@ public class AttachmentController {
     private final AttachmentViewInfo attachment;
 
 
-    AttachmentController(MessagingController controller, MessageViewFragment messageViewFragment,
+    AttachmentController(Context context, MessagingController controller, MessageViewFragment messageViewFragment,
             AttachmentViewInfo attachment) {
-        this.context = messageViewFragment.getApplicationContext();
+        this.context = context;
         this.controller = controller;
         this.messageViewFragment = messageViewFragment;
         this.attachment = attachment;
@@ -86,7 +86,7 @@ public class AttachmentController {
 
     private void downloadAttachment(LocalPart localPart, final Runnable attachmentDownloadedCallback) {
         String accountUuid = localPart.getAccountUuid();
-        Account account = Preferences.getPreferences(context).getAccount(accountUuid);
+        Account account = Preferences.getPreferences().getAccount(accountUuid);
         LocalMessage message = localPart.getMessage();
 
         messageViewFragment.showAttachmentLoadingDialog();
@@ -117,7 +117,7 @@ public class AttachmentController {
         ContentResolver contentResolver = context.getContentResolver();
         InputStream in = contentResolver.openInputStream(attachment.internalUri);
         try {
-            OutputStream out = contentResolver.openOutputStream(documentUri);
+            OutputStream out = contentResolver.openOutputStream(documentUri, "wt");
             try {
                 IOUtils.copy(in, out);
                 out.flush();
@@ -140,11 +140,11 @@ public class AttachmentController {
         }
 
         String displayName = attachment.displayName;
-        String inferredMimeType = MimeUtility.getMimeTypeByExtension(displayName);
+        String inferredMimeType = MimeTypeUtil.getMimeTypeByExtension(displayName);
 
         IntentAndResolvedActivitiesCount resolvedIntentInfo;
         String mimeType = attachment.mimeType;
-        if (MimeUtility.isDefaultMimeType(mimeType)) {
+        if (MimeTypeUtil.isDefaultMimeType(mimeType)) {
             resolvedIntentInfo = getViewIntentForMimeType(intentDataUri, inferredMimeType);
         } else {
             resolvedIntentInfo = getViewIntentForMimeType(intentDataUri, mimeType);
@@ -154,7 +154,7 @@ public class AttachmentController {
         }
 
         if (!resolvedIntentInfo.hasResolvedActivities()) {
-            resolvedIntentInfo = getViewIntentForMimeType(intentDataUri, MimeUtility.DEFAULT_ATTACHMENT_MIME_TYPE);
+            resolvedIntentInfo = getViewIntentForMimeType(intentDataUri, MimeTypeUtil.DEFAULT_ATTACHMENT_MIME_TYPE);
         }
 
         return resolvedIntentInfo.getIntent();
@@ -221,11 +221,6 @@ public class AttachmentController {
     private class ViewAttachmentAsyncTask extends AsyncTask<Void, Void, Intent> {
 
         @Override
-        protected void onPreExecute() {
-            messageViewFragment.disableAttachmentButtons(attachment);
-        }
-
-        @Override
         protected Intent doInBackground(Void... params) {
             return getBestViewIntent();
         }
@@ -233,7 +228,6 @@ public class AttachmentController {
         @Override
         protected void onPostExecute(Intent intent) {
             viewAttachment(intent);
-            messageViewFragment.enableAttachmentButtons(attachment);
         }
 
         private void viewAttachment(Intent intent) {
@@ -251,11 +245,6 @@ public class AttachmentController {
     private class SaveAttachmentAsyncTask extends AsyncTask<Uri, Void, Boolean> {
 
         @Override
-        protected void onPreExecute() {
-            messageViewFragment.disableAttachmentButtons(attachment);
-        }
-
-        @Override
         protected Boolean doInBackground(Uri... params) {
             try {
                 Uri documentUri = params[0];
@@ -269,7 +258,6 @@ public class AttachmentController {
 
         @Override
         protected void onPostExecute(Boolean success) {
-            messageViewFragment.enableAttachmentButtons(attachment);
             if (!success) {
                 displayAttachmentNotSavedMessage();
             }

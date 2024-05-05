@@ -14,6 +14,8 @@ class TestNotificationResourceProvider : NotificationResourceProvider {
     override val wearIconReplyAll: Int = 11
     override val wearIconMarkAsSpam: Int = 12
 
+    override val pushChannelName = "Synchronize (Push)"
+    override val pushChannelDescription = "Displayed while waiting for new messages"
     override val messagesChannelName = "Messages"
     override val messagesChannelDescription = "Notifications related to messages"
     override val miscellaneousChannelName = "Miscellaneous"
@@ -24,14 +26,20 @@ class TestNotificationResourceProvider : NotificationResourceProvider {
     override fun authenticationErrorBody(accountName: String): String =
         "Authentication failed for $accountName. Update your server settings."
 
+    override fun notifyErrorTitle(): String = "Notification error"
+
+    override fun notifyErrorText(): String {
+        return "An error has occurred while trying to create a system notification for a new message. " +
+            "The reason is most likely a missing notification sound.\n" +
+            "\n" +
+            "Tap to open notification settings."
+    }
+
+    override fun certificateErrorTitle(): String = "Certificate error"
+
     override fun certificateErrorTitle(accountName: String): String = "Certificate error for $accountName"
 
     override fun certificateErrorBody(): String = "Check your server settings"
-
-    override fun newMailTitle(): String = "New mail"
-
-    override fun newMailUnreadMessageCount(unreadMessageCount: Int, accountName: String): String =
-        "$unreadMessageCount Unread ($accountName)"
 
     override fun newMessagesTitle(newMessagesCount: Int): String = when (newMessagesCount) {
         1 -> "1 new message"

@@ -1,6 +1,8 @@
-apply plugin: 'com.android.library'
-apply plugin: 'org.jetbrains.kotlin.android'
-apply plugin: 'org.jetbrains.kotlin.plugin.parcelize'
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.parcelize)
+}
 
 dependencies {
     api project(":app:ui:base")
@@ -9,6 +11,7 @@ dependencies {
     implementation project(":app:autodiscovery:api")
     implementation project(":app:autodiscovery:providersxml")
     implementation project(":mail:common")
+    implementation project(":ui-utils:ToolbarBottomSheet")
 
     //TODO: Remove AccountSetupIncoming's dependency on these
     compileOnly project(":mail:protocols:imap")
@@ -16,90 +19,85 @@ dependencies {
 
     implementation project(':plugins:openpgp-api-lib:openpgp-api')
 
-    implementation "androidx.appcompat:appcompat:${versions.androidxAppCompat}"
-    implementation "androidx.preference:preference:${versions.androidxPreference}"
-    implementation "com.takisoft.preferencex:preferencex:${versions.preferencesFix}"
-    implementation "com.takisoft.preferencex:preferencex-datetimepicker:${versions.preferencesFix}"
-    implementation "com.takisoft.preferencex:preferencex-colorpicker:${versions.preferencesFix}"
-    implementation "com.takisoft.preferencex:preferencex-ringtone:${versions.preferencesFix}"
-    implementation "androidx.recyclerview:recyclerview:${versions.androidxRecyclerView}"
-    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:${versions.androidxLifecycle}"
-    implementation "androidx.lifecycle:lifecycle-livedata-ktx:${versions.androidxLifecycle}"
-    implementation "androidx.constraintlayout:constraintlayout:${versions.androidxConstraintLayout}"
-    implementation "androidx.cardview:cardview:${versions.androidxCardView}"
-    implementation "androidx.localbroadcastmanager:localbroadcastmanager:${versions.androidxLocalBroadcastManager}"
-    implementation "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0"
-    implementation "com.google.android.material:material:${versions.materialComponents}"
-    implementation "de.cketti.library.changelog:ckchangelog-core:2.0.0-beta01"
-    implementation "com.splitwise:tokenautocomplete:4.0.0-beta01"
-    implementation "de.cketti.safecontentresolver:safe-content-resolver-v21:1.0.0"
-    implementation 'com.mikepenz:materialdrawer:8.4.0'
-    implementation 'com.mikepenz:materialdrawer-iconics:8.3.3'
-    implementation 'com.mikepenz:fontawesome-typeface:5.9.0.0-kotlin@aar'
-    implementation 'com.github.ByteHamster:SearchPreference:v2.0.0'
-    implementation "com.mikepenz:fastadapter:${versions.fastAdapter}"
-    implementation "com.mikepenz:fastadapter-extensions-drag:${versions.fastAdapter}"
-    implementation "com.mikepenz:fastadapter-extensions-utils:${versions.fastAdapter}"
-    implementation 'de.hdodenhof:circleimageview:3.1.0'
+    implementation 'com.github.hannesa2:githubAppUpdate:2.0'
+    implementation libs.androidx.appcompat
+    implementation libs.androidx.preference
+    implementation libs.preferencex
+    implementation libs.preferencex.datetimepicker
+    implementation libs.preferencex.colorpicker
+    implementation libs.androidx.recyclerview
+    implementation project(':ui-utils:LinearLayoutManager')
+    implementation project(':ui-utils:ItemTouchHelper')
+    implementation libs.androidx.lifecycle.runtime.ktx
+    implementation libs.androidx.lifecycle.viewmodel.ktx
+    implementation libs.androidx.lifecycle.livedata.ktx
+    implementation libs.androidx.constraintlayout
+    implementation libs.androidx.localbroadcastmanager
+    implementation libs.androidx.swiperefreshlayout
+    implementation libs.ckchangelog.core
+    implementation libs.tokenautocomplete
+    implementation libs.safeContentResolver
+    implementation libs.materialdrawer
+    implementation libs.searchPreference
+    implementation libs.fastadapter
+    implementation libs.fastadapter.extensions.drag
+    implementation libs.fastadapter.extensions.utils
+    implementation libs.circleimageview
+    api libs.appauth
 
-    implementation "commons-io:commons-io:${versions.commonsIo}"
-    implementation "androidx.core:core-ktx:${versions.androidxCore}"
-    implementation "net.jcip:jcip-annotations:1.0"
-    implementation "com.jakewharton.timber:timber:${versions.timber}"
-    implementation "org.apache.james:apache-mime4j-core:${versions.mime4j}"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${versions.kotlinCoroutines}"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:${versions.kotlinCoroutines}"
+    implementation libs.commons.io
+    implementation libs.androidx.core.ktx
+    implementation libs.jcip.annotations
+    implementation libs.timber
+    implementation libs.mime4j.core
+    implementation libs.kotlinx.coroutines.core
+    implementation libs.kotlinx.coroutines.android
 
-    implementation "com.github.bumptech.glide:glide:${versions.glide}"
-    annotationProcessor "com.github.bumptech.glide:compiler:${versions.glide}"
+    implementation "com.github.AppDevNext.Logcat:LogcatCoreLib:2.12"
+    implementation "com.github.AppDevNext.Logcat:LogcatCoreUI:2.12"
+
+    implementation libs.glide
+    annotationProcessor libs.glide.compiler
 
     testImplementation project(':mail:testing')
     testImplementation project(':app:storage')
     testImplementation project(':app:testing')
-    testImplementation "org.robolectric:robolectric:${versions.robolectric}"
-    testImplementation "junit:junit:${versions.junit}"
-    testImplementation "com.google.truth:truth:${versions.truth}"
-    testImplementation "org.mockito:mockito-core:${versions.mockito}"
-    testImplementation "org.mockito.kotlin:mockito-kotlin:${versions.mockitoKotlin}"
-    testImplementation "org.koin:koin-test:${versions.koin}"
+    testImplementation libs.robolectric
+    testImplementation libs.androidx.test.core
+    testImplementation libs.junit
+    testImplementation libs.kotlin.test
+    testImplementation libs.truth
+    testImplementation libs.mockito.inline
+    testImplementation libs.mockito.kotlin
+    testImplementation libs.koin.test
+    testImplementation libs.koin.test.junit4
+    testImplementation libs.kotlinx.coroutines.test
+    testImplementation libs.turbine
 }
 
 android {
-    compileSdkVersion buildConfig.compileSdk
-    buildToolsVersion buildConfig.buildTools
+    namespace 'com.fsck.k9.ui'
+
+    buildFeatures {
+        buildConfig true
+    }
 
     defaultConfig {
-        minSdkVersion buildConfig.minSdk
-        targetSdkVersion buildConfig.robolectricSdk
+        buildConfigField "String", 'GIT_REPOSITORY', "\"" + getGitOriginRemote() + "\""
+        buildConfigField "String", 'VERSIONNAME', "\"" + getTag() + "\""
     }
 
     buildTypes {
         debug {
             def useNewSetupUi = project.hasProperty('k9mail.useNewSetupUi') ? project.property('k9mail.useNewSetupUi') : "false"
             buildConfigField "boolean", "USE_NEW_SETUP_UI_FOR_ONBOARDING", useNewSetupUi
+
+            manifestPlaceholders = ['appAuthRedirectScheme': 'FIXME: override this in your app project']
         }
         release {
             buildConfigField "boolean", "USE_NEW_SETUP_UI_FOR_ONBOARDING", "false"
-        }
-    }
 
-    lintOptions {
-        abortOnError false
-        lintConfig file("$rootProject.projectDir/config/lint/lint.xml")
-    }
-
-    compileOptions {
-        sourceCompatibility javaVersion
-        targetCompatibility javaVersion
-    }
-
-    kotlinOptions {
-        jvmTarget = kotlinJvmVersion
-    }
-
-    testOptions {
-        unitTests {
-            includeAndroidResources = true
+            manifestPlaceholders = ['appAuthRedirectScheme': 'FIXME: override this in your app project']
         }
     }
 }

@@ -9,6 +9,7 @@ import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.text.method.DigitsKeyListener;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.ViewGroup;
@@ -19,11 +20,10 @@ import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.CompoundButton.OnCheckedChangeListener;
 import android.widget.Spinner;
-import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import com.fsck.k9.Account;
-import com.fsck.k9.Account.FolderMode;
 import com.fsck.k9.DI;
 import com.fsck.k9.LocalKeyStoreManager;
 import com.fsck.k9.Preferences;
@@ -32,21 +32,20 @@ import com.fsck.k9.helper.EmailHelper;
 import com.fsck.k9.setup.ServerNameSuggester;
 import com.fsck.k9.ui.base.K9Activity;
 import com.fsck.k9.activity.setup.AccountSetupCheckSettings.CheckDirection;
-import com.fsck.k9.controller.MessagingController;
 import com.fsck.k9.helper.Utility;
-import com.fsck.k9.job.K9JobManager;
 import com.fsck.k9.mail.AuthType;
 import com.fsck.k9.mail.ConnectionSecurity;
 import com.fsck.k9.mail.MailServerDirection;
-import com.fsck.k9.mail.NetworkType;
 import com.fsck.k9.mail.ServerSettings;
 import com.fsck.k9.mail.store.imap.ImapStoreSettings;
 import com.fsck.k9.mail.store.webdav.WebDavStoreSettings;
 import com.fsck.k9.preferences.Protocols;
 import com.fsck.k9.ui.R;
+import com.fsck.k9.ui.base.extensions.TextInputLayoutHelper;
 import com.fsck.k9.view.ClientCertificateSpinner;
 import com.fsck.k9.view.ClientCertificateSpinner.OnClientCertificateChangedListener;
 
+import java.util.Locale;
 import java.util.Map;
 
 import com.google.android.material.textfield.TextInputEditText;
@@ -62,8 +61,6 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
     private static final String STATE_SECURITY_TYPE_POSITION = "stateSecurityTypePosition";
     private static final String STATE_AUTH_TYPE_POSITION = "authTypePosition";
 
-    private final MessagingController messagingController = DI.get(MessagingController.class);
-    private final K9JobManager jobManager = DI.get(K9JobManager.class);
     private final AccountCreator accountCreator = DI.get(AccountCreator.class);
     private final ServerNameSuggester serverNameSuggester = DI.get(ServerNameSuggester.class);
 
@@ -88,12 +85,11 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
     private Button mNextButton;
     private Account mAccount;
     private boolean mMakeDefault;
-    private CheckBox mCompressionMobile;
-    private CheckBox mCompressionWifi;
-    private CheckBox mCompressionOther;
+    private CheckBox useCompressionCheckBox;
     private CheckBox mSubscribedFoldersOnly;
     private AuthTypeAdapter mAuthTypeAdapter;
     private ConnectionSecurity[] mConnectionSecurityChoices = ConnectionSecurity.values();
+    private boolean editSettings;
 
     public static void actionIncomingSettings(Activity context, Account account, boolean makeDefault) {
         Intent i = new Intent(context, AccountSetupIncoming.class);
@@ -121,6 +117,7 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setLayout(R.layout.account_setup_incoming);
+        setTitle(R.string.account_setup_incoming_title);
 
         mUsernameView = findViewById(R.id.account_username);
         mPasswordView = findViewById(R.id.account_password);
@@ -136,9 +133,7 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
         mWebdavAuthPathView = findViewById(R.id.webdav_auth_path);
         mWebdavMailboxPathView = findViewById(R.id.webdav_mailbox_path);
         mNextButton = findViewById(R.id.next);
-        mCompressionMobile = findViewById(R.id.compression_mobile);
-        mCompressionWifi = findViewById(R.id.compression_wifi);
-        mCompressionOther = findViewById(R.id.compression_other);
+        useCompressionCheckBox = findViewById(R.id.use_compression);
         mSubscribedFoldersOnly = findViewById(R.id.subscribed_folders_only);
         mAllowClientCertificateView = findViewById(R.id.account_allow_client_certificate);
 
@@ -158,16 +153,13 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
             }
         });
 
-        mAuthTypeAdapter = AuthTypeAdapter.get(this);
-        mAuthTypeView.setAdapter(mAuthTypeAdapter);
-
         /*
          * Only allow digits in the port field.
          */
         mPortView.setKeyListener(DigitsKeyListener.getInstance("0123456789"));
 
         String accountUuid = getIntent().getStringExtra(EXTRA_ACCOUNT);
-        mAccount = Preferences.getPreferences(this).getAccount(accountUuid);
+        mAccount = Preferences.getPreferences().getAccount(accountUuid);
         mMakeDefault = getIntent().getBooleanExtra(EXTRA_MAKE_DEFAULT, false);
 
         /*
@@ -176,10 +168,19 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
          */
         if (savedInstanceState != null && savedInstanceState.containsKey(EXTRA_ACCOUNT)) {
             accountUuid = savedInstanceState.getString(EXTRA_ACCOUNT);
-            mAccount = Preferences.getPreferences(this).getAccount(accountUuid);
+            mAccount = Preferences.getPreferences().getAccount(accountUuid);
         }
 
-        boolean editSettings = Intent.ACTION_EDIT.equals(getIntent().getAction());
+        boolean oAuthSupported = mAccount.getIncomingServerSettings().type.equals(Protocols.IMAP);
+        mAuthTypeAdapter = AuthTypeAdapter.get(this, oAuthSupported);
+        mAuthTypeView.setAdapter(mAuthTypeAdapter);
+
+        editSettings = Intent.ACTION_EDIT.equals(getIntent().getAction());
+        if (editSettings) {
+            if (getSupportActionBar() != null) {
+                getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            }
+        }
 
         try {
             ServerSettings settings = mAccount.getIncomingServerSettings();
@@ -211,8 +212,7 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
                 findViewById(R.id.webdav_mailbox_alias_section).setVisibility(View.GONE);
                 findViewById(R.id.webdav_owa_path_section).setVisibility(View.GONE);
                 findViewById(R.id.webdav_auth_path_section).setVisibility(View.GONE);
-                findViewById(R.id.compression_section).setVisibility(View.GONE);
-                findViewById(R.id.compression_label).setVisibility(View.GONE);
+                useCompressionCheckBox.setVisibility(View.GONE);
                 mSubscribedFoldersOnly.setVisibility(View.GONE);
             } else if (settings.type.equals(Protocols.IMAP)) {
                 serverLayoutView.setHint(getString(R.string.account_setup_incoming_imap_server_label));
@@ -243,8 +243,7 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
                 findViewById(R.id.imap_path_prefix_section).setVisibility(View.GONE);
                 findViewById(R.id.account_auth_type_label).setVisibility(View.GONE);
                 findViewById(R.id.account_auth_type).setVisibility(View.GONE);
-                findViewById(R.id.compression_section).setVisibility(View.GONE);
-                findViewById(R.id.compression_label).setVisibility(View.GONE);
+                useCompressionCheckBox.setVisibility(View.GONE);
                 mSubscribedFoldersOnly.setVisibility(View.GONE);
 
                 String path = WebDavStoreSettings.getPath(settings);
@@ -294,16 +293,14 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
             updateAuthPlainTextFromSecurityType(settings.connectionSecurity);
             updateViewFromSecurity();
 
-            mCompressionMobile.setChecked(mAccount.useCompression(NetworkType.MOBILE));
-            mCompressionWifi.setChecked(mAccount.useCompression(NetworkType.WIFI));
-            mCompressionOther.setChecked(mAccount.useCompression(NetworkType.OTHER));
+            useCompressionCheckBox.setChecked(mAccount.useCompression());
 
             if (settings.host != null) {
                 mServerView.setText(settings.host);
             }
 
             if (settings.port != -1) {
-                mPortView.setText(String.format("%d", settings.port));
+                mPortView.setText(String.format(Locale.ROOT, "%d", settings.port));
             } else {
                 updatePortFromSecurityType();
             }
@@ -382,10 +379,20 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
         mPasswordView.addTextChangedListener(validationTextWatcher);
         mServerView.addTextChangedListener(validationTextWatcher);
         mPortView.addTextChangedListener(validationTextWatcher);
+
+        if (editSettings) {
+            TextInputLayoutHelper.configureAuthenticatedPasswordToggle(
+                    mPasswordLayoutView,
+                    this,
+                    getString(R.string.account_setup_basics_show_password_biometrics_title),
+                    getString(R.string.account_setup_basics_show_password_biometrics_subtitle),
+                    getString(R.string.account_setup_basics_show_password_need_lock)
+            );
+        }
     }
 
     @Override
-    public void onSaveInstanceState(Bundle outState) {
+    public void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
         outState.putString(EXTRA_ACCOUNT, mAccount.getUuid());
         outState.putInt(STATE_SECURITY_TYPE_POSITION, mCurrentSecurityTypeViewPosition);
@@ -409,17 +416,14 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
      * Shows/hides password field and client certificate spinner
      */
     private void updateViewFromAuthType() {
-        AuthType authType = getSelectedAuthType();
-        boolean isAuthTypeExternal = (AuthType.EXTERNAL == authType);
-
-        if (isAuthTypeExternal) {
-
-            // hide password fields, show client certificate fields
-            mPasswordLayoutView.setVisibility(View.GONE);
-        } else {
-
-            // show password fields, hide client certificate fields
-            mPasswordLayoutView.setVisibility(View.VISIBLE);
+        switch (getSelectedAuthType()) {
+            case EXTERNAL:
+            case XOAUTH2:
+                mPasswordLayoutView.setVisibility(View.GONE);
+                break;
+            default:
+                mPasswordLayoutView.setVisibility(View.VISIBLE);
+                break;
         }
     }
 
@@ -430,8 +434,9 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
     private void updateViewFromSecurity() {
         ConnectionSecurity security = getSelectedSecurity();
         boolean isUsingTLS = ((ConnectionSecurity.SSL_TLS_REQUIRED  == security) || (ConnectionSecurity.STARTTLS_REQUIRED == security));
+        boolean isUsingOAuth = getSelectedAuthType() == AuthType.XOAUTH2;
 
-        if (isUsingTLS) {
+        if (isUsingTLS && !isUsingOAuth) {
             mAllowClientCertificateView.setVisibility(View.VISIBLE);
         } else {
             mAllowClientCertificateView.setVisibility(View.GONE);
@@ -502,9 +507,13 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
                 && hasConnectionSecurity
                 && hasValidCertificateAlias;
 
+        boolean hasValidOAuthSettings = hasValidUserName
+                && hasConnectionSecurity
+                && authType == AuthType.XOAUTH2;
+
         mNextButton.setEnabled(Utility.domainFieldValid(mServerView)
                 && Utility.requiredFieldValid(mPortView)
-                && (hasValidPasswordSettings || hasValidExternalAuthSettings));
+                && (hasValidPasswordSettings || hasValidExternalAuthSettings || hasValidOAuthSettings));
         Utility.setCompoundDrawablesAlpha(mNextButton, mNextButton.isEnabled() ? 255 : 128);
     }
 
@@ -532,19 +541,15 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
         }
 
         if (resultCode == RESULT_OK) {
-            if (Intent.ACTION_EDIT.equals(getIntent().getAction())) {
-                boolean isPushCapable = messagingController.isPushCapable(mAccount);
-                if (isPushCapable && mAccount.getFolderPushMode() != FolderMode.NONE) {
-                    jobManager.schedulePusherRefresh();
-                }
-                Preferences.getPreferences(getApplicationContext()).saveAccount(mAccount);
+            if (editSettings) {
+                Preferences.getPreferences().saveAccount(mAccount);
                 finish();
             } else {
                 /*
                  * Set the username and password for the outgoing settings to the username and
                  * password the user just set for incoming.
                  */
-                String username = mUsernameView.getText().toString();
+                String username = mUsernameView.getText().toString().trim();
 
                 String password = null;
                 String clientCertificateAlias = null;
@@ -564,16 +569,26 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
                         clientCertificateAlias);
                 mAccount.setOutgoingServerSettings(transportServer);
 
-                AccountSetupOutgoing.actionOutgoingSettings(this, mAccount, mMakeDefault);
+                AccountSetupOutgoing.actionOutgoingSettings(this, mAccount);
             }
         }
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            onBackPressed();
+            return true;
+        }
+
+        return super.onOptionsItemSelected(item);
     }
 
     protected void onNext() {
         try {
             ConnectionSecurity connectionSecurity = getSelectedSecurity();
 
-            String username = mUsernameView.getText().toString();
+            String username = mUsernameView.getText().toString().trim();
             String password = null;
             String clientCertificateAlias = null;
 
@@ -607,9 +622,7 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
 
             mAccount.setIncomingServerSettings(settings);
 
-            mAccount.setCompression(NetworkType.MOBILE, mCompressionMobile.isChecked());
-            mAccount.setCompression(NetworkType.WIFI, mCompressionWifi.isChecked());
-            mAccount.setCompression(NetworkType.OTHER, mCompressionOther.isChecked());
+            mAccount.setUseCompression(useCompressionCheckBox.isChecked());
             mAccount.setSubscribedFoldersOnly(mSubscribedFoldersOnly.isChecked());
 
             AccountSetupCheckSettings.actionCheckSettings(this, mAccount, CheckDirection.INCOMING);
@@ -656,12 +669,7 @@ public class AccountSetupIncoming extends K9Activity implements OnClickListener 
         }
     };
 
-    OnClientCertificateChangedListener clientCertificateChangedListener = new OnClientCertificateChangedListener() {
-        @Override
-        public void onClientCertificateChanged(String alias) {
-            validateFields();
-        }
-    };
+    OnClientCertificateChangedListener clientCertificateChangedListener = alias -> validateFields();
 
     private AuthType getSelectedAuthType() {
         AuthTypeHolder holder = (AuthTypeHolder) mAuthTypeView.getSelectedItem();

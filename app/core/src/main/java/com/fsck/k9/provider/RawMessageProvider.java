@@ -99,8 +99,7 @@ public class RawMessageProvider extends ContentProvider {
 
     private long computeMessageSize(LocalMessage message) {
         // TODO: Store message size in database when saving message so this can be a simple lookup instead.
-        try {
-            CountingOutputStream countingOutputStream = new CountingOutputStream();
+        try (CountingOutputStream countingOutputStream = new CountingOutputStream()) {
             message.writeTo(countingOutputStream);
             return countingOutputStream.getCount();
         } catch (IOException | MessagingException e) {
@@ -175,7 +174,7 @@ public class RawMessageProvider extends ContentProvider {
         long folderId = messageReference.getFolderId();
         String uid = messageReference.getUid();
 
-        Account account = Preferences.getPreferences(getContext()).getAccount(accountUuid);
+        Account account = Preferences.getPreferences().getAccount(accountUuid);
         if (account == null) {
             Timber.w("Account not found: %s", accountUuid);
             return null;

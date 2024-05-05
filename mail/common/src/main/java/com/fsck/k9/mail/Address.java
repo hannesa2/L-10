@@ -1,25 +1,24 @@
 
 package com.fsck.k9.mail;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.VisibleForTesting;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import com.fsck.k9.logging.Timber;
+import com.fsck.k9.mail.helper.Rfc822Token;
+import com.fsck.k9.mail.helper.Rfc822Tokenizer;
+import com.fsck.k9.mail.helper.TextUtils;
 import org.apache.james.mime4j.MimeException;
 import org.apache.james.mime4j.codec.DecodeMonitor;
 import org.apache.james.mime4j.codec.EncoderUtil;
 import org.apache.james.mime4j.dom.address.Mailbox;
 import org.apache.james.mime4j.dom.address.MailboxList;
 import org.apache.james.mime4j.field.address.DefaultAddressParser;
-import timber.log.Timber;
-
-import android.text.TextUtils;
-import android.text.util.Rfc822Token;
-import android.text.util.Rfc822Tokenizer;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.VisibleForTesting;
 
 public class Address implements Serializable {
     private static final Pattern ATOM = Pattern.compile("^(?:[a-zA-Z0-9!#$%&'*+\\-/=?^_`{|}~]|\\s)+$");
@@ -29,7 +28,7 @@ public class Address implements Serializable {
      */
     private static final Address[] EMPTY_ADDRESS_ARRAY = new Address[0];
 
-    @NonNull
+    @NotNull
     private String mAddress;
 
     private String mPersonal;
@@ -219,11 +218,11 @@ public class Address implements Serializable {
         int pairEndIndex = 0;
         int addressEndIndex = 0;
         while (pairStartIndex < length) {
-            pairEndIndex = addressList.indexOf(",\u0000", pairStartIndex);
+            pairEndIndex = addressList.indexOf(",\u0001", pairStartIndex);
             if (pairEndIndex == -1) {
                 pairEndIndex = length;
             }
-            addressEndIndex = addressList.indexOf(";\u0000", pairStartIndex);
+            addressEndIndex = addressList.indexOf(";\u0001", pairStartIndex);
             String address = null;
             String personal = null;
             if (addressEndIndex == -1 || addressEndIndex > pairEndIndex) {
@@ -241,8 +240,8 @@ public class Address implements Serializable {
     /**
      * Packs an address list into a String that is very quick to read
      * and parse. Packed lists can be unpacked with unpackAddressList()
-     * The packed list is a ",\u0000" separated list of:
-     * address;\u0000personal
+     * The packed list is a ",\u0001" separated list of:
+     * address;\u0001personal
      * @param addresses Array of addresses to pack.
      * @return Packed addresses.
      */
@@ -256,13 +255,13 @@ public class Address implements Serializable {
             sb.append(address.getAddress());
             String personal = address.getPersonal();
             if (personal != null) {
-                sb.append(";\u0000");
+                sb.append(";\u0001");
                 // Escape quotes in the address part on the way in
                 personal = personal.replaceAll("\"", "\\\"");
                 sb.append(personal);
             }
             if (i < count - 1) {
-                sb.append(",\u0000");
+                sb.append(",\u0001");
             }
         }
         return sb.toString();

@@ -1,7 +1,7 @@
 /*
  * These functions are based on Okio's UTF-8 code.
  *
- * Copyright (C) 2018 The K-9 Dog Walkers
+ * Copyright (C) 2018 The L-10 Dog Walkers
  * Copyright (C) 2017 Square, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +29,7 @@ inline fun String.encodeUtf8(beginIndex: Int = 0, endIndex: Int = length, crossi
     // Transcode a UTF-16 Java String to UTF-8 bytes.
     var i = beginIndex
     while (i < endIndex) {
-        val c = this[i].toInt()
+        val c = this[i].code
 
         if (c < 0x80) {
             // Emit a 7-bit character with 1 byte.
@@ -49,9 +49,9 @@ inline fun String.encodeUtf8(beginIndex: Int = 0, endIndex: Int = length, crossi
         } else {
             // c is a surrogate. Make sure it is a high surrogate and that its successor is a low surrogate.
             // If not, the UTF-16 is invalid, in which case we emit a replacement character.
-            val low = if (i + 1 < endIndex) this[i + 1].toInt() else 0
+            val low = if (i + 1 < endIndex) this[i + 1].code else 0
             if (c > 0xdbff || low < 0xdc00 || low > 0xdfff) {
-                writeByte('?'.toByte())
+                writeByte('?'.code.toByte())
                 i++
                 continue
             }
@@ -104,7 +104,7 @@ inline fun Int.encodeUtf8(crossinline writeByte: (Byte) -> Unit) {
         writeByte((codePoint and 0x3f or 0x80).toByte()) // 10xxxxxx
     } else if (codePoint in 0xd800..0xdfff) {
         // codePoint is a surrogate. Emit a replacement character
-        writeByte('?'.toByte())
+        writeByte('?'.code.toByte())
     } else {
         // Emit a 21-bit character with 4 bytes.
         writeByte((codePoint shr 18 or 0xf0).toByte()) // 11110xxx

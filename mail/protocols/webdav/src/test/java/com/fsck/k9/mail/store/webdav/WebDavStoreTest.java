@@ -12,12 +12,10 @@ import com.fsck.k9.mail.AuthType;
 import com.fsck.k9.mail.CertificateValidationException;
 import com.fsck.k9.mail.ConnectionSecurity;
 import com.fsck.k9.mail.FolderType;
-import com.fsck.k9.mail.K9LibRobolectricTestRunner;
 import com.fsck.k9.mail.MessagingException;
 import com.fsck.k9.mail.ServerSettings;
 import com.fsck.k9.mail.filter.Base64;
 import com.fsck.k9.mail.ssl.TrustManagerFactory;
-
 import javax.net.ssl.SSLException;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -37,7 +35,6 @@ import org.apache.http.params.HttpParams;
 import org.apache.http.protocol.HttpContext;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -47,12 +44,11 @@ import org.mockito.stubbing.OngoingStubbing;
 
 import static junit.framework.Assert.assertSame;
 import static org.junit.Assert.assertEquals;
-import static org.mockito.Matchers.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 
-@RunWith(K9LibRobolectricTestRunner.class)
 public class WebDavStoreTest {
     private static final HttpResponse OK_200_RESPONSE = createOkResponse();
     private static final HttpResponse UNAUTHORIZED_401_RESPONSE = createResponse(401);
@@ -69,6 +65,8 @@ public class WebDavStoreTest {
     private SchemeRegistry mockSchemeRegistry;
     @Mock
     private TrustManagerFactory trustManagerFactory;
+    @Mock
+    private SniHostSetter sniHostSetter;
     @Mock
     private DraftsFolderProvider draftsFolderProvider;
 
@@ -352,12 +350,14 @@ public class WebDavStoreTest {
     }
 
     private WebDavStore createWebDavStore() {
-        return new WebDavStore(trustManagerFactory, serverSettings, draftsFolderProvider, mockHttpClientFactory);
+        return new WebDavStore(trustManagerFactory, sniHostSetter, serverSettings, draftsFolderProvider,
+                mockHttpClientFactory);
     }
 
     private WebDavStore createWebDavStore(ConnectionSecurity connectionSecurity) {
         ServerSettings serverSettings = createServerSettings(connectionSecurity);
-        return new WebDavStore(trustManagerFactory, serverSettings, draftsFolderProvider, mockHttpClientFactory);
+        return new WebDavStore(trustManagerFactory, sniHostSetter, serverSettings, draftsFolderProvider,
+                mockHttpClientFactory);
     }
 
     private void configureHttpResponses(HttpResponse... responses) throws IOException {

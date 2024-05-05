@@ -8,17 +8,15 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.os.IBinder;
-import android.os.PowerManager;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.fsck.k9.Account;
 import com.fsck.k9.DI;
 import com.fsck.k9.K9;
 import com.fsck.k9.Preferences;
+import com.fsck.k9.mail.power.PowerManager;
+import com.fsck.k9.mail.power.WakeLock;
 import com.fsck.k9.mailstore.LocalStoreProvider;
-import com.fsck.k9.mailstore.UnavailableStorageException;
-import com.fsck.k9.power.TracingPowerManager;
-import com.fsck.k9.power.TracingPowerManager.TracingWakeLock;
 import timber.log.Timber;
 
 /**
@@ -103,7 +101,7 @@ public class DatabaseUpgradeService extends Service {
     private int mProgress;
     private int mProgressEnd;
 
-    private TracingWakeLock mWakeLock;
+    private WakeLock mWakeLock;
 
 
     @Override
@@ -140,8 +138,8 @@ public class DatabaseUpgradeService extends Service {
      * Acquire a partial wake lock so the CPU won't go to sleep when the screen is turned off.
      */
     private void acquireWakelock() {
-        TracingPowerManager pm = TracingPowerManager.getPowerManager(this);
-        mWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG);
+        PowerManager pm = DI.get(PowerManager.class);
+        mWakeLock = pm.newWakeLock(WAKELOCK_TAG);
         mWakeLock.setReferenceCounted(false);
         mWakeLock.acquire(WAKELOCK_TIMEOUT);
     }
@@ -181,7 +179,7 @@ public class DatabaseUpgradeService extends Service {
      * Upgrade the accounts' databases.
      */
     private void upgradeDatabases() {
-        Preferences preferences = Preferences.getPreferences(this);
+        Preferences preferences = Preferences.getPreferences();
 
         List<Account> accounts = preferences.getAccounts();
         mProgressEnd = accounts.size();
@@ -195,8 +193,6 @@ public class DatabaseUpgradeService extends Service {
             try {
                 // Account.getLocalStore() is blocking and will upgrade the database if necessary
                 DI.get(LocalStoreProvider.class).getInstance(account);
-            } catch (UnavailableStorageException e) {
-                Timber.e("Database unavailable");
             } catch (Exception e) {
                 Timber.e(e, "Error while upgrading database");
             }

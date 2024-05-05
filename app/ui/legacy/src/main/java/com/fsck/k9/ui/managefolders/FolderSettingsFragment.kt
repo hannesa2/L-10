@@ -15,11 +15,10 @@ import com.fsck.k9.ui.observeNotNull
 import com.takisoft.preferencex.PreferenceFragmentCompat
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
-import org.koin.core.parameter.parametersOf
 
 class FolderSettingsFragment : PreferenceFragmentCompat(), ConfirmationDialogFragmentListener {
     private val viewModel: FolderSettingsViewModel by viewModel()
-    private val folderNameFormatter: FolderNameFormatter by inject { parametersOf(requireActivity()) }
+    private val folderNameFormatter: FolderNameFormatter by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -110,6 +109,7 @@ class FolderSettingsFragment : PreferenceFragmentCompat(), ConfirmationDialogFra
     private fun setPreferenceVisibility(folderSettings: FolderSettingsData) {
         if (folderSettings.folder.isLocalOnly) {
             requirePreference<Preference>(PREFERENCE_POLL_CLASS).isVisible = false
+            requirePreference<Preference>(PREFERENCE_PUSH_CLASS).isVisible = false
             requirePreference<Preference>(PREFERENCE_NOTIFICATION_CLASS).isVisible = false
         }
     }
@@ -140,6 +140,7 @@ class FolderSettingsFragment : PreferenceFragmentCompat(), ConfirmationDialogFra
 
         private const val PREFERENCE_TOP_CATEGORY = "folder_settings"
         private const val PREFERENCE_POLL_CLASS = "folder_settings_folder_sync_mode"
+        private const val PREFERENCE_PUSH_CLASS = "folder_settings_folder_push_mode"
         private const val PREFERENCE_NOTIFICATION_CLASS = "folder_settings_folder_notify_mode"
     }
 }

@@ -4,6 +4,7 @@ import com.fsck.k9.backend.api.BackendFolder
 import com.fsck.k9.backend.api.BackendFolder.MoreMessages
 import com.fsck.k9.mail.Flag
 import com.fsck.k9.mail.Message
+import com.fsck.k9.mail.MessageDownloadState
 import java.util.Date
 import com.fsck.k9.mailstore.MoreMessages as StoreMoreMessages
 
@@ -34,10 +35,6 @@ class K9BackendFolder(
         visibleLimit = init.visibleLimit
     }
 
-    override fun getLastUid(): Long? {
-        return messageStore.getLastUid(folderId)
-    }
-
     override fun getMessageServerIds(): Set<String> {
         return messageStore.getMessageServerIds(folderId)
     }
@@ -66,7 +63,7 @@ class K9BackendFolder(
     }
 
     override fun setLastChecked(timestamp: Long) {
-        messageStore.setLastUpdated(folderId, timestamp)
+        messageStore.setLastChecked(folderId, timestamp)
     }
 
     override fun setStatus(status: String?) {
@@ -85,18 +82,10 @@ class K9BackendFolder(
         messageStore.setMessageFlag(folderId, messageServerId, flag, value)
     }
 
-    override fun saveCompleteMessage(message: Message) {
-        saveMessage(message, partialMessage = false)
-    }
-
-    override fun savePartialMessage(message: Message) {
-        saveMessage(message, partialMessage = true)
-    }
-
-    private fun saveMessage(message: Message, partialMessage: Boolean) {
+    override fun saveMessage(message: Message, downloadState: MessageDownloadState) {
         requireMessageServerId(message)
 
-        val messageData = saveMessageDataCreator.createSaveMessageData(message, partialMessage)
+        val messageData = saveMessageDataCreator.createSaveMessageData(message, downloadState)
         messageStore.saveRemoteMessage(folderId, message.uid, messageData)
     }
 

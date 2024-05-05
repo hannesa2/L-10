@@ -14,6 +14,8 @@ interface NotificationResourceProvider {
     val wearIconReplyAll: Int
     val wearIconMarkAsSpam: Int
 
+    val pushChannelName: String
+    val pushChannelDescription: String
     val messagesChannelName: String
     val messagesChannelDescription: String
     val miscellaneousChannelName: String
@@ -22,11 +24,13 @@ interface NotificationResourceProvider {
     fun authenticationErrorTitle(): String
     fun authenticationErrorBody(accountName: String): String
 
+    fun notifyErrorTitle(): String
+    fun notifyErrorText(): String
+
+    fun certificateErrorTitle(): String
     fun certificateErrorTitle(accountName: String): String
     fun certificateErrorBody(): String
 
-    fun newMailTitle(): String
-    fun newMailUnreadMessageCount(unreadMessageCount: Int, accountName: String): String
     fun newMessagesTitle(newMessagesCount: Int): String
     fun additionalMessages(overflowMessagesCount: Int, accountName: String): String
     fun previewEncrypted(): String

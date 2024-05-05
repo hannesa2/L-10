@@ -22,7 +22,7 @@ public class MessageHelperTest extends RobolectricTest {
 
     @Before
     public void setUp() throws Exception {
-        Context context = RuntimeEnvironment.application;
+        Context context = RuntimeEnvironment.getApplication();
         contacts = new Contacts(context);
         contactsWithFakeContact = new Contacts(context) {
             @Override public String getNameForAddress(String address) {
@@ -92,6 +92,20 @@ public class MessageHelperTest extends RobolectricTest {
         Address address = new Address("test@testor.com", "potus@whitehouse.gov");
         CharSequence friendly = MessageHelper.toFriendly(address, contacts);
         assertEquals("test@testor.com", friendly.toString());
+    }
+
+    @Test
+    public void toFriendly_atPrecededByOpeningParenthesisShouldNotTriggerSpoofPrevention() {
+        Address address = new Address("gitlab@gitlab.example", "username (@username)");
+        CharSequence friendly = MessageHelper.toFriendly(address, contacts);
+        assertEquals("username (@username)", friendly.toString());
+    }
+
+    @Test
+    public void toFriendly_nameStartingWithAtShouldNotTriggerSpoofPrevention() {
+        Address address = new Address("address@domain.example", "@username");
+        CharSequence friendly = MessageHelper.toFriendly(address, contacts);
+        assertEquals("@username", friendly.toString());
     }
 
     @Test

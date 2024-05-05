@@ -1,6 +1,7 @@
 package com.fsck.k9.ui.managefolders
 
 import androidx.preference.PreferenceDataStore
+import com.fsck.k9.Account
 import com.fsck.k9.mail.FolderClass
 import com.fsck.k9.mailstore.FolderDetails
 import com.fsck.k9.mailstore.FolderRepository
@@ -11,6 +12,7 @@ import kotlinx.coroutines.launch
 
 class FolderSettingsDataStore(
     private val folderRepository: FolderRepository,
+    private val account: Account,
     private var folder: FolderDetails
 ) : PreferenceDataStore() {
     private val saveScope = CoroutineScope(GlobalScope.coroutineContext + Dispatchers.IO)
@@ -36,6 +38,7 @@ class FolderSettingsDataStore(
             "folder_settings_folder_display_mode" -> folder.displayClass.name
             "folder_settings_folder_sync_mode" -> folder.syncClass.name
             "folder_settings_folder_notify_mode" -> folder.notifyClass.name
+            "folder_settings_folder_push_mode" -> folder.pushClass.name
             else -> error("Unknown key: $key")
         }
     }
@@ -53,6 +56,9 @@ class FolderSettingsDataStore(
             "folder_settings_folder_notify_mode" -> {
                 updateFolder(folder.copy(notifyClass = FolderClass.valueOf(newValue)))
             }
+            "folder_settings_folder_push_mode" -> {
+                updateFolder(folder.copy(pushClass = FolderClass.valueOf(newValue)))
+            }
             else -> error("Unknown key: $key")
         }
     }
@@ -60,7 +66,7 @@ class FolderSettingsDataStore(
     private fun updateFolder(newFolder: FolderDetails) {
         folder = newFolder
         saveScope.launch {
-            folderRepository.updateFolderDetails(newFolder)
+            folderRepository.updateFolderDetails(account, newFolder)
         }
     }
 }

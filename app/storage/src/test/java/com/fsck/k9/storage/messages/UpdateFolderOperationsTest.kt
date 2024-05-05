@@ -99,6 +99,17 @@ class UpdateFolderOperationsTest : RobolectricTest() {
     }
 
     @Test
+    fun `update push class`() {
+        val folderId = sqliteDatabase.createFolder(pushClass = "FIRST_CLASS")
+
+        updateFolderOperations.setPushClass(folderId = folderId, folderClass = FolderClass.NO_CLASS)
+
+        val folder = sqliteDatabase.readFolders().first()
+        assertThat(folder.id).isEqualTo(folderId)
+        assertThat(folder.pushClass).isEqualTo("NO_CLASS")
+    }
+
+    @Test
     fun `update notification class`() {
         val folderId = sqliteDatabase.createFolder(syncClass = "FIRST_CLASS")
 
@@ -124,7 +135,7 @@ class UpdateFolderOperationsTest : RobolectricTest() {
     fun `update late updated state`() {
         val folderId = sqliteDatabase.createFolder(lastUpdated = 23)
 
-        updateFolderOperations.setLastUpdated(folderId = folderId, timestamp = 42)
+        updateFolderOperations.setLastChecked(folderId = folderId, timestamp = 42)
 
         val folder = sqliteDatabase.readFolders().first()
         assertThat(folder.id).isEqualTo(folderId)
@@ -140,5 +151,16 @@ class UpdateFolderOperationsTest : RobolectricTest() {
         val folder = sqliteDatabase.readFolders().first()
         assertThat(folder.id).isEqualTo(folderId)
         assertThat(folder.status).isEqualTo("Sync error")
+    }
+
+    @Test
+    fun `update visible limit`() {
+        val folderId = sqliteDatabase.createFolder(visibleLimit = 10)
+
+        updateFolderOperations.setVisibleLimit(folderId = folderId, visibleLimit = 25)
+
+        val folder = sqliteDatabase.readFolders().first()
+        assertThat(folder.id).isEqualTo(folderId)
+        assertThat(folder.visibleLimit).isEqualTo(25)
     }
 }

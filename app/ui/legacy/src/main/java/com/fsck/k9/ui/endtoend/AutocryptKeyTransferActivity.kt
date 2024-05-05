@@ -38,6 +38,7 @@ class AutocryptKeyTransferActivity : K9Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setLayout(R.layout.crypto_key_transfer)
+        setTitle(R.string.ac_transfer_title)
 
         val accountUuid = intent.getStringExtra(EXTRA_ACCOUNT)
 
@@ -61,8 +62,8 @@ class AutocryptKeyTransferActivity : K9Activity() {
         presenter.initFromIntent(accountUuid)
     }
 
-    override fun onOptionsItemSelected(item: MenuItem?): Boolean {
-        if (item?.itemId == android.R.id.home) {
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        if (item.itemId == android.R.id.home) {
             presenter.onClickHome()
             return true
         } else {

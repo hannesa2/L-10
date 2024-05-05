@@ -2,12 +2,31 @@ package com.fsck.k9.mailstore
 
 import com.fsck.k9.Account
 import com.fsck.k9.Account.FolderMode
+import com.fsck.k9.DI
+import com.fsck.k9.controller.MessagingController
+import com.fsck.k9.controller.SimpleMessagingListener
 import com.fsck.k9.mail.FolderClass
+import com.fsck.k9.preferences.AccountManager
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.trySendBlocking
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import com.fsck.k9.mail.FolderType as RemoteFolderType
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class FolderRepository(
     private val messageStoreManager: MessageStoreManager,
-    private val account: Account
+    private val accountManager: AccountManager,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     private val sortForDisplay =
         compareByDescending<DisplayFolder> { it.folder.type == FolderType.INBOX }
@@ -16,7 +35,7 @@ class FolderRepository(
             .thenByDescending { it.isInTopGroup }
             .thenBy(String.CASE_INSENSITIVE_ORDER) { it.folder.name }
 
-    fun getDisplayFolders(displayMode: FolderMode?): List<DisplayFolder> {
+    fun getDisplayFolders(account: Account, displayMode: FolderMode?): List<DisplayFolder> {
         val messageStore = messageStoreManager.getMessageStore(account)
         return messageStore.getDisplayFolders(
             displayMode = displayMode ?: account.folderDisplayMode,
@@ -26,35 +45,77 @@ class FolderRepository(
                 folder = Folder(
                     id = folder.id,
                     name = folder.name,
-                    type = folderTypeOf(folder.id),
+                    type = folderTypeOf(account, folder.id),
                     isLocalOnly = folder.isLocalOnly
                 ),
                 isInTopGroup = folder.isInTopGroup,
-                unreadCount = folder.messageCount
+                unreadMessageCount = folder.unreadMessageCount,
+                starredMessageCount = folder.starredMessageCount
             )
         }.sortedWith(sortForDisplay)
     }
 
-    fun getFolder(folderId: Long): Folder? {
+    fun getDisplayFoldersFlow(account: Account, displayMode: FolderMode): Flow<List<DisplayFolder>> {
+        val messagingController = DI.get<MessagingController>()
+        val messageStore = messageStoreManager.getMessageStore(account)
+
+        return callbackFlow {
+            send(getDisplayFolders(account, displayMode))
+
+            val folderStatusChangedListener = object : SimpleMessagingListener() {
+                override fun folderStatusChanged(statusChangedAccount: Account, folderId: Long) {
+                    if (statusChangedAccount.uuid == account.uuid) {
+                        trySendBlocking(getDisplayFolders(account, displayMode))
+                    }
+                }
+            }
+            messagingController.addListener(folderStatusChangedListener)
+
+            val folderSettingsChangedListener = FolderSettingsChangedListener {
+                trySendBlocking(getDisplayFolders(account, displayMode))
+            }
+            messageStore.addFolderSettingsChangedListener(folderSettingsChangedListener)
+
+            awaitClose {
+                messagingController.removeListener(folderStatusChangedListener)
+                messageStore.removeFolderSettingsChangedListener(folderSettingsChangedListener)
+            }
+        }.buffer(capacity = Channel.CONFLATED)
+            .distinctUntilChanged()
+            .flowOn(ioDispatcher)
+    }
+
+    fun getDisplayFoldersFlow(account: Account): Flow<List<DisplayFolder>> {
+        return accountManager.getAccountFlow(account.uuid)
+            .map { latestAccount ->
+                AccountContainer(latestAccount, latestAccount.folderDisplayMode)
+            }
+            .distinctUntilChanged()
+            .flatMapLatest { (account, folderDisplayMode) ->
+                getDisplayFoldersFlow(account, folderDisplayMode)
+            }
+    }
+
+    fun getFolder(account: Account, folderId: Long): Folder? {
         val messageStore = messageStoreManager.getMessageStore(account)
         return messageStore.getFolder(folderId) { folder ->
             Folder(
                 id = folder.id,
                 name = folder.name,
-                type = folderTypeOf(folder.id),
+                type = folderTypeOf(account, folder.id),
                 isLocalOnly = folder.isLocalOnly
             )
         }
     }
 
-    fun getFolderDetails(folderId: Long): FolderDetails? {
+    fun getFolderDetails(account: Account, folderId: Long): FolderDetails? {
         val messageStore = messageStoreManager.getMessageStore(account)
         return messageStore.getFolder(folderId) { folder ->
             FolderDetails(
                 folder = Folder(
                     id = folder.id,
                     name = folder.name,
-                    type = folderTypeOf(folder.id),
+                    type = folderTypeOf(account, folder.id),
                     isLocalOnly = folder.isLocalOnly
                 ),
                 isInTopGroup = folder.isInTopGroup,
@@ -67,7 +128,7 @@ class FolderRepository(
         }
     }
 
-    fun getRemoteFolders(): List<RemoteFolder> {
+    fun getRemoteFolders(account: Account): List<RemoteFolder> {
         val messageStore = messageStoreManager.getMessageStore(account)
         return messageStore.getFolders(excludeLocalOnly = true) { folder ->
             RemoteFolder(
@@ -79,7 +140,7 @@ class FolderRepository(
         }
     }
 
-    fun getRemoteFolderDetails(): List<RemoteFolderDetails> {
+    fun getRemoteFolderDetails(account: Account): List<RemoteFolderDetails> {
         val messageStore = messageStoreManager.getMessageStore(account)
         return messageStore.getFolders(excludeLocalOnly = true) { folder ->
             RemoteFolderDetails(
@@ -99,49 +160,100 @@ class FolderRepository(
         }
     }
 
-    fun getFolderServerId(folderId: Long): String? {
+    fun getPushFoldersFlow(account: Account): Flow<List<RemoteFolder>> {
+        return account.getFolderPushModeFlow()
+            .flatMapLatest { pushMode ->
+                getPushFoldersFlow(account, pushMode)
+            }
+    }
+
+    private fun getPushFoldersFlow(account: Account, folderMode: FolderMode): Flow<List<RemoteFolder>> {
+        val messageStore = messageStoreManager.getMessageStore(account)
+        return callbackFlow {
+            send(getPushFolders(account, folderMode))
+
+            val listener = FolderSettingsChangedListener {
+                trySendBlocking(getPushFolders(account, folderMode))
+            }
+            messageStore.addFolderSettingsChangedListener(listener)
+
+            awaitClose {
+                messageStore.removeFolderSettingsChangedListener(listener)
+            }
+        }.buffer(capacity = Channel.CONFLATED)
+            .distinctUntilChanged()
+            .flowOn(ioDispatcher)
+    }
+
+    private fun getPushFolders(account: Account, folderMode: FolderMode): List<RemoteFolder> {
+        if (folderMode == FolderMode.NONE) return emptyList()
+
+        return getRemoteFolderDetails(account)
+            .asSequence()
+            .filter { folderDetails ->
+                val pushClass = folderDetails.effectivePushClass
+                when (folderMode) {
+                    FolderMode.NONE -> false
+                    FolderMode.ALL -> true
+                    FolderMode.FIRST_CLASS -> pushClass == FolderClass.FIRST_CLASS
+                    FolderMode.FIRST_AND_SECOND_CLASS -> {
+                        pushClass == FolderClass.FIRST_CLASS || pushClass == FolderClass.SECOND_CLASS
+                    }
+                    FolderMode.NOT_SECOND_CLASS -> pushClass != FolderClass.SECOND_CLASS
+                }
+            }
+            .map { folderDetails -> folderDetails.folder }
+            .toList()
+    }
+
+    fun getFolderServerId(account: Account, folderId: Long): String? {
         val messageStore = messageStoreManager.getMessageStore(account)
         return messageStore.getFolder(folderId) { folder ->
             folder.serverId
         }
     }
 
-    fun getFolderId(folderServerId: String): Long? {
+    fun getFolderId(account: Account, folderServerId: String): Long? {
         val messageStore = messageStoreManager.getMessageStore(account)
         return messageStore.getFolderId(folderServerId)
     }
 
-    fun isFolderPresent(folderId: Long): Boolean {
+    fun isFolderPresent(account: Account, folderId: Long): Boolean {
         val messageStore = messageStoreManager.getMessageStore(account)
         return messageStore.getFolder(folderId) { true } ?: false
     }
 
-    fun updateFolderDetails(folderDetails: FolderDetails) {
+    fun updateFolderDetails(account: Account, folderDetails: FolderDetails) {
         val messageStore = messageStoreManager.getMessageStore(account)
         messageStore.updateFolderSettings(folderDetails)
     }
 
-    fun setIncludeInUnifiedInbox(folderId: Long, includeInUnifiedInbox: Boolean) {
+    fun setIncludeInUnifiedInbox(account: Account, folderId: Long, includeInUnifiedInbox: Boolean) {
         val messageStore = messageStoreManager.getMessageStore(account)
         messageStore.setIncludeInUnifiedInbox(folderId, includeInUnifiedInbox)
     }
 
-    fun setDisplayClass(folderId: Long, folderClass: FolderClass) {
+    fun setDisplayClass(account: Account, folderId: Long, folderClass: FolderClass) {
         val messageStore = messageStoreManager.getMessageStore(account)
         messageStore.setDisplayClass(folderId, folderClass)
     }
 
-    fun setSyncClass(folderId: Long, folderClass: FolderClass) {
+    fun setSyncClass(account: Account, folderId: Long, folderClass: FolderClass) {
         val messageStore = messageStoreManager.getMessageStore(account)
         messageStore.setSyncClass(folderId, folderClass)
     }
 
-    fun setNotificationClass(folderId: Long, folderClass: FolderClass) {
+    fun setPushClass(account: Account, folderId: Long, folderClass: FolderClass) {
+        val messageStore = messageStoreManager.getMessageStore(account)
+        messageStore.setPushClass(folderId, folderClass)
+    }
+
+    fun setNotificationClass(account: Account, folderId: Long, folderClass: FolderClass) {
         val messageStore = messageStoreManager.getMessageStore(account)
         messageStore.setNotificationClass(folderId, folderClass)
     }
 
-    private fun folderTypeOf(folderId: Long) = when (folderId) {
+    private fun folderTypeOf(account: Account, folderId: Long) = when (folderId) {
         account.inboxFolderId -> FolderType.INBOX
         account.outboxFolderId -> FolderType.OUTBOX
         account.sentFolderId -> FolderType.SENT
@@ -162,7 +274,22 @@ class FolderRepository(
         RemoteFolderType.SPAM -> FolderType.SPAM
         RemoteFolderType.ARCHIVE -> FolderType.ARCHIVE
     }
+
+    private fun Account.getFolderPushModeFlow(): Flow<FolderMode> {
+        return accountManager.getAccountFlow(uuid).map { it.folderPushMode }
+    }
+
+    private val RemoteFolderDetails.effectivePushClass: FolderClass
+        get() = if (pushClass == FolderClass.INHERITED) effectiveSyncClass else pushClass
+
+    private val RemoteFolderDetails.effectiveSyncClass: FolderClass
+        get() = if (syncClass == FolderClass.INHERITED) displayClass else syncClass
 }
+
+private data class AccountContainer(
+    val account: Account,
+    val folderDisplayMode: FolderMode
+)
 
 data class Folder(val id: Long, val name: String, val type: FolderType, val isLocalOnly: Boolean)
 
@@ -191,7 +318,8 @@ data class RemoteFolderDetails(
 data class DisplayFolder(
     val folder: Folder,
     val isInTopGroup: Boolean,
-    val unreadCount: Int
+    val unreadMessageCount: Int,
+    val starredMessageCount: Int
 )
 
 enum class FolderType {

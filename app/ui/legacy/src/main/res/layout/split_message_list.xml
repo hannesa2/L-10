@@ -3,7 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/drawerLayout"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    tools:context="com.fsck.k9.activity.MessageList">
 
     <RelativeLayout
         android:layout_width="match_parent"
@@ -40,7 +41,8 @@
                 android:id="@+id/message_list_container"
                 android:layout_width="fill_parent"
                 android:layout_height="fill_parent"
-                android:layout_weight="5"/>
+                android:layout_weight="5"
+                tools:layout="@layout/message_list_fragment" />
 
             <View
                 android:id="@+id/message_list_divider"
@@ -53,21 +55,12 @@
                 android:id="@+id/message_view_container"
                 android:layout_width="fill_parent"
                 android:layout_height="fill_parent"
-                android:layout_weight="3" />
+                android:layout_weight="3"
+                tools:layout="@layout/message" />
 
         </LinearLayout>
     </RelativeLayout>
 
-    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-        android:id="@+id/material_drawer_swipe_refresh"
-        android:layout_width="wrap_content"
-        android:layout_height="match_parent"
-        android:layout_gravity="start">
+    <include layout="@layout/drawer_contents"/>
 
-        <com.mikepenz.materialdrawer.widget.MaterialDrawerSliderView
-            android:id="@+id/material_drawer_slider"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent" />
-
-    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 </androidx.drawerlayout.widget.DrawerLayout>

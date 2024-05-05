@@ -41,8 +41,8 @@ import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertSame;
 import static junit.framework.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.nullable;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.same;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
@@ -70,7 +70,7 @@ public class MessageCryptoHelperTest extends RobolectricTest {
         when(openPgpApiFactory.createOpenPgpApi(any(Context.class), nullable(IOpenPgpService2.class)))
                 .thenReturn(openPgpApi);
 
-        messageCryptoHelper = new MessageCryptoHelper(RuntimeEnvironment.application, openPgpApiFactory,
+        messageCryptoHelper = new MessageCryptoHelper(RuntimeEnvironment.getApplication(), openPgpApiFactory,
                 autocryptOperations, "org.example.dummy");
         messageCryptoCallback = mock(MessageCryptoCallback.class);
     }

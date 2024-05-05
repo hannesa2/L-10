@@ -188,7 +188,7 @@ class TextBodyBuilder {
     private String getSignatureHtml() {
         String signature = "";
         if (!isEmpty(mSignature)) {
-            signature = "<div style='white-space: pre-wrap'>" + textToHtmlFragment(mSignature) + "</div>";
+            signature = HtmlConverter.textToHtmlFragment(mSignature);
         }
         return signature;
     }
@@ -205,10 +205,7 @@ class TextBodyBuilder {
         return mQuotedTextHtml;
     }
 
-    /**
-     * protected for unit-test purposes
-     */
-    protected String textToHtmlFragment(String text) {
+    private String textToHtmlFragment(String text) {
         return HtmlConverter.textToHtmlFragment(text);
     }
 

@@ -1,46 +1,14 @@
-apply plugin: 'com.android.library'
-apply plugin: 'org.jetbrains.kotlin.android'
-
-if (rootProject.testCoverage) {
-    apply plugin: 'jacoco'
+plugins {
+    id 'java-library'
+    id 'kotlin'
+    alias(libs.plugins.android.lint)
 }
 
 dependencies {
     api project(":backend:api")
     api project(":mail:protocols:webdav")
 
-    implementation "com.jakewharton.timber:timber:${versions.timber}"
-
     testImplementation project(":mail:testing")
-    testImplementation "junit:junit:${versions.junit}"
-    testImplementation "org.mockito:mockito-core:${versions.mockito}"
-}
-
-android {
-    compileSdkVersion buildConfig.compileSdk
-    buildToolsVersion buildConfig.buildTools
-
-    defaultConfig {
-        minSdkVersion buildConfig.minSdk
-    }
-
-    buildTypes {
-        debug {
-            testCoverageEnabled rootProject.testCoverage
-        }
-    }
-
-    lintOptions {
-        abortOnError false
-        lintConfig file("$rootProject.projectDir/config/lint/lint.xml")
-    }
-
-    compileOptions {
-        sourceCompatibility javaVersion
-        targetCompatibility javaVersion
-    }
-
-    kotlinOptions {
-        jvmTarget = kotlinJvmVersion
-    }
+    testImplementation libs.junit
+    testImplementation libs.mockito.core
 }

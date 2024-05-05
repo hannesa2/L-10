@@ -1,11 +1,12 @@
 package com.fsck.k9.ui.settings
 
 import com.fsck.k9.helper.NamedThreadFactory
-import com.fsck.k9.ui.account.AccountsLiveData
 import com.fsck.k9.ui.settings.account.AccountSettingsDataStoreFactory
 import com.fsck.k9.ui.settings.account.AccountSettingsViewModel
+import com.fsck.k9.ui.settings.account.getSystemVibrator
 import com.fsck.k9.ui.settings.export.SettingsExportViewModel
 import com.fsck.k9.ui.settings.general.GeneralSettingsDataStore
+import com.fsck.k9.ui.settings.general.GeneralSettingsViewModel
 import com.fsck.k9.ui.settings.import.AccountActivator
 import com.fsck.k9.ui.settings.import.SettingsImportResultViewModel
 import com.fsck.k9.ui.settings.import.SettingsImportViewModel
@@ -15,16 +16,25 @@ import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 val settingsUiModule = module {
-    single { AccountsLiveData(get()) }
-    viewModel { SettingsViewModel(accountManager = get(), accounts = get()) }
+    viewModel { SettingsViewModel(accountManager = get()) }
 
-    factory { GeneralSettingsDataStore(jobManager = get(), themeManager = get(), appLanguageManager = get()) }
+    viewModel { GeneralSettingsViewModel(logFileWriter = get()) }
+    factory { GeneralSettingsDataStore(jobManager = get(), appLanguageManager = get(), generalSettingsManager = get()) }
     single(named("SaveSettingsExecutorService")) {
         Executors.newSingleThreadExecutor(NamedThreadFactory("SaveSettings"))
     }
 
     viewModel { AccountSettingsViewModel(get(), get(), get()) }
-    single { AccountSettingsDataStoreFactory(get(), get(), get(named("SaveSettingsExecutorService"))) }
+    single {
+        AccountSettingsDataStoreFactory(
+            preferences = get(),
+            jobManager = get(),
+            executorService = get(named("SaveSettingsExecutorService")),
+            notificationChannelManager = get(),
+            notificationController = get()
+        )
+    }
+    factory { getSystemVibrator(context = get()) }
 
     viewModel { SettingsExportViewModel(context = get(), preferences = get(), settingsExporter = get()) }
     viewModel { SettingsImportViewModel(get(), get()) }

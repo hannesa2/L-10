@@ -3,6 +3,7 @@ package com.fsck.k9.message;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 import android.app.Activity;
 import android.app.PendingIntent;
@@ -49,6 +50,7 @@ public abstract class MessageBuilder {
     private Address[] to;
     private Address[] cc;
     private Address[] bcc;
+    private Address[] replyTo;
     private String inReplyTo;
     private String references;
     private boolean requestReadReceipt;
@@ -56,6 +58,7 @@ public abstract class MessageBuilder {
     private SimpleMessageFormat messageFormat;
     private String text;
     private List<Attachment> attachments;
+    private Map<String, Attachment> inlineAttachments;
     private String signature;
     private QuoteStyle quoteStyle;
     private QuotedTextMode quotedTextMode;
@@ -113,10 +116,7 @@ public abstract class MessageBuilder {
             message.setHeader("User-Agent", encodedUserAgent);
         }
 
-        final String replyTo = identity.getReplyTo();
-        if (replyTo != null) {
-            message.setReplyTo(new Address[] { new Address(replyTo) });
-        }
+        message.setReplyTo(replyTo);
 
         if (inReplyTo != null) {
             message.setInReplyTo(inReplyTo);
@@ -169,7 +169,16 @@ public abstract class MessageBuilder {
             // Let the receiver select either the text or the HTML part.
             bodyPlain = buildText(isDraft, SimpleMessageFormat.TEXT);
             composedMimeMessage.addBodyPart(MimeBodyPart.create(bodyPlain, "text/plain"));
-            composedMimeMessage.addBodyPart(MimeBodyPart.create(body, "text/html"));
+            MimeBodyPart htmlPart = MimeBodyPart.create(body, "text/html");
+            if (inlineAttachments != null && inlineAttachments.size() > 0) {
+                MimeMultipart htmlPartWithInlineImages = new MimeMultipart("multipart/related",
+                        boundaryGenerator.generateBoundary());
+                htmlPartWithInlineImages.addBodyPart(htmlPart);
+                addInlineAttachmentsToMessage(htmlPartWithInlineImages);
+                composedMimeMessage.addBodyPart(MimeBodyPart.create(htmlPartWithInlineImages));
+            } else {
+                composedMimeMessage.addBodyPart(htmlPart);
+            }
 
             if (hasAttachments) {
                 // If we're HTML and have attachments, we have a MimeMultipart container to hold the
@@ -236,7 +245,25 @@ public abstract class MessageBuilder {
             MimeBodyPart bp = MimeBodyPart.create(body);
 
             addContentType(bp, attachment.getContentType(), attachment.getName());
-            addContentDisposition(bp, attachment.getName(), attachment.getSize());
+            addContentDisposition(bp, "attachment", attachment.getName(), attachment.getSize());
+
+            mp.addBodyPart(bp);
+        }
+    }
+
+    private void addInlineAttachmentsToMessage(final MimeMultipart mp) throws MessagingException {
+        for (String cid : inlineAttachments.keySet()) {
+            Attachment attachment = inlineAttachments.get(cid);
+            if (attachment.getState() != Attachment.LoadingState.COMPLETE) {
+                continue;
+            }
+
+            Body body = new TempFileBody(attachment.getFileName());
+            MimeBodyPart bp = MimeBodyPart.create(body);
+
+            addContentType(bp, attachment.getContentType(), attachment.getName());
+            addContentDisposition(bp, "inline", attachment.getName(), attachment.getSize());
+            bp.addHeader(MimeHeader.HEADER_CONTENT_ID, cid);
 
             mp.addBodyPart(bp);
         }
@@ -251,8 +278,8 @@ public abstract class MessageBuilder {
         }
     }
 
-    private void addContentDisposition(MimeBodyPart bodyPart, String fileName, Long size) {
-        String value = Headers.contentDisposition("attachment", fileName, size);
+    private void addContentDisposition(MimeBodyPart bodyPart, String disposition, String fileName, Long size) {
+        String value = Headers.contentDisposition(disposition, fileName, size);
         bodyPart.addHeader(MimeHeader.HEADER_CONTENT_DISPOSITION, value);
     }
 
@@ -366,6 +393,11 @@ public abstract class MessageBuilder {
         return this;
     }
 
+    public MessageBuilder setReplyTo(Address[] replyTo) {
+        this.replyTo = replyTo;
+        return this;
+    }
+
     public MessageBuilder setInReplyTo(String inReplyTo) {
         this.inReplyTo = inReplyTo;
         return this;
@@ -398,6 +430,11 @@ public abstract class MessageBuilder {
 
     public MessageBuilder setAttachments(List<Attachment> attachments) {
         this.attachments = attachments;
+        return this;
+    }
+
+    public MessageBuilder setInlineAttachments(Map<String, Attachment> attachments) {
+        this.inlineAttachments = attachments;
         return this;
     }
 

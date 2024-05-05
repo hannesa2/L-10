@@ -110,8 +110,12 @@ public class RecipientLoader extends AsyncTaskLoader<List<Recipient>> {
                 return timesContactedDiff;
             }
 
-            if (lhs.sortKey == null || rhs.sortKey == null) {
+            if (lhs.sortKey == null && rhs.sortKey == null) {
                 return 0;
+            } else if (lhs.sortKey == null) {
+                return 1;
+            } else if (rhs.sortKey == null) {
+                return -1;
             }
 
             return CASE_INSENSITIVE_ORDER.compare(lhs.sortKey, rhs.sortKey);
@@ -280,6 +284,9 @@ public class RecipientLoader extends AsyncTaskLoader<List<Recipient>> {
 
     private void fillContactDataFromLookupKey(Uri lookupKeyUri, List<Recipient> recipients,
             Map<String, Recipient> recipientMap) {
+        // We shouldn't try to access the contacts if we don't have the necessary permission
+        if (!hasContactPermission())
+            return;
         // We could use the contact id from the URI directly, but getting it from the lookup key is safer
         Uri contactContentUri = Contacts.lookupContact(contentResolver, lookupKeyUri);
         if (contactContentUri == null) {

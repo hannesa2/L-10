@@ -15,8 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 
-import androidx.annotation.NonNull;
-
+import com.fsck.k9.logging.Timber;
 import com.fsck.k9.mail.Address;
 import com.fsck.k9.mail.Body;
 import com.fsck.k9.mail.BodyFactory;
@@ -38,7 +37,7 @@ import org.apache.james.mime4j.parser.MimeStreamParser;
 import org.apache.james.mime4j.stream.BodyDescriptor;
 import org.apache.james.mime4j.stream.Field;
 import org.apache.james.mime4j.stream.MimeConfig;
-import timber.log.Timber;
+import org.jetbrains.annotations.NotNull;
 
 
 /**
@@ -434,7 +433,7 @@ public class MimeMessage extends Message {
         mHeader.setHeader(name, value);
     }
 
-    @NonNull
+    @NotNull
     @Override
     public String[] getHeader(String name) {
         return mHeader.getHeader(name);
@@ -638,7 +637,7 @@ public class MimeMessage extends Message {
     public MimeBodyPart toBodyPart() throws MessagingException {
         MimeHeader contentHeaders = new MimeHeader();
         for (String header : mHeader.getHeaderNames()) {
-            if (header.toLowerCase().startsWith("content-")) {
+            if (header.toLowerCase(Locale.ROOT).startsWith("content-")) {
                 for (String value : mHeader.getHeader(header)) {
                     contentHeaders.addHeader(header, value);
                 }

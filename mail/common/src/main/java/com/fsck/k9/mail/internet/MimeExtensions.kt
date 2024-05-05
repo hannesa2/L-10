@@ -26,6 +26,7 @@ internal const val SEMICOLON = ';'
 internal const val EQUALS_SIGN = '='
 internal const val ASTERISK = '*'
 internal const val SINGLE_QUOTE = '\''
+internal const val BACKSLASH = '\\'
 
 internal fun Char.isTSpecial() = this in TSPECIALS
 
@@ -34,7 +35,7 @@ internal fun Char.isTSpecial() = this in TSPECIALS
 internal fun Char.isTokenChar() = isVChar() && !isTSpecial()
 
 // RFC 5234: VCHAR = %x21-7E
-internal fun Char.isVChar() = toInt() in 33..126
+internal fun Char.isVChar() = code in 33..126
 
 // RFC 5234: WSP =  SP / HTAB
 internal fun Char.isWsp() = this == SPACE || this == HTAB
@@ -45,7 +46,7 @@ internal fun Char.isWspOrCrlf() = this == SPACE || this == HTAB || this == CR ||
 internal fun Char.isAttributeChar() = isVChar() && this != '*' && this != '\'' && this != '%' && !isTSpecial()
 
 // RFC 5322: ctext = %d33-39 / %d42-91 / %d93-126
-internal fun Char.isCText() = toInt().let { it in 33..39 || it in 42..91 || it in 93..126 }
+internal fun Char.isCText() = code.let { it in 33..39 || it in 42..91 || it in 93..126 }
 
 // RFC 5234: DIGIT = %x30-39 ; 0-9
 internal fun Char.isDIGIT() = this in '0'..'9'
@@ -59,4 +60,4 @@ internal fun Char.isAText() = isALPHA() || isDIGIT() || this in ATEXT_SPECIAL
 
 // RFC 5322: Printable US-ASCII characters not including "[", "]", or "\"
 // dtext = %d33-90 / %d94-126 / obs-dtext
-internal fun Char.isDText() = toInt().let { it in 33..90 || it in 94..126 }
+internal fun Char.isDText() = code.let { it in 33..90 || it in 94..126 }

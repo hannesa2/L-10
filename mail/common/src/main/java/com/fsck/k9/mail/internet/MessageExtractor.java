@@ -10,22 +10,18 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
+import com.fsck.k9.logging.Timber;
 import com.fsck.k9.mail.Body;
 import com.fsck.k9.mail.BodyPart;
 import com.fsck.k9.mail.Message;
 import com.fsck.k9.mail.MessagingException;
 import com.fsck.k9.mail.Multipart;
 import com.fsck.k9.mail.Part;
-import com.fsck.k9.mail.internet.Viewable.Flowed;
 import org.apache.commons.io.input.BoundedInputStream;
-import timber.log.Timber;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import static com.fsck.k9.mail.internet.CharsetSupport.fixupCharset;
-import static com.fsck.k9.mail.internet.MimeUtility.getHeaderParameter;
-import static com.fsck.k9.mail.internet.FlowedMessageUtils.isFormatFlowed;
 import static com.fsck.k9.mail.internet.MimeUtility.isSameMimeType;
 import static com.fsck.k9.mail.internet.Viewable.Alternative;
 import static com.fsck.k9.mail.internet.Viewable.Html;
@@ -44,27 +40,33 @@ public class MessageExtractor {
     }
 
     public static String getTextFromPart(Part part, long textSizeLimit) {
-        try {
-            if ((part != null) && (part.getBody() != null)) {
-                final Body body = part.getBody();
-                if (body instanceof TextBody) {
-                    return ((TextBody) body).getRawText();
-                }
-                final String mimeType = part.getMimeType();
-                if (mimeType != null && MimeUtility.mimeTypeMatches(mimeType, "text/*") ||
-                        part.isMimeType("application/pgp")) {
-                    return getTextFromTextPart(part, body, mimeType, textSizeLimit);
-                } else {
-                    throw new MessagingException("Provided non-text part: " + mimeType);
-                }
-            } else {
-                throw new MessagingException("Provided invalid part");
-            }
-        } catch (IOException e) {
-            Timber.e(e, "Unable to getTextFromPart");
-        } catch (MessagingException e) {
-            Timber.e("Unable to getTextFromPart");
+        if (part == null) {
+            throw new IllegalArgumentException("Argument 'part' must not be null");
         }
+
+        try {
+            Body body = part.getBody();
+            if (body == null) {
+                Timber.v("No body present for this message part");
+                return null;
+            }
+
+            if (body instanceof TextBody) {
+                TextBody textBody = (TextBody) body;
+                return textBody.getRawText();
+            }
+
+            String mimeType = part.getMimeType();
+            if (mimeType != null && MimeUtility.mimeTypeMatches(mimeType, "text/*") ||
+                    part.isMimeType("application/pgp")) {
+                return getTextFromTextPart(part, body, mimeType, textSizeLimit);
+            }
+
+            Timber.w("Provided non-text part: %s", mimeType);
+        } catch (IOException | MessagingException e) {
+            Timber.e(e, "Unable to getTextFromPart");
+        }
+
         return null;
     }
 
@@ -73,7 +75,7 @@ public class MessageExtractor {
         /*
          * We've got a text part, so let's see if it needs to be processed further.
          */
-        String charset = getHeaderParameter(part.getContentType(), "charset");
+        String charset = PartExtensions.getCharset(part);
         /*
          * determine the charset from HTML message.
          */
@@ -106,12 +108,21 @@ public class MessageExtractor {
         InputStream in = MimeUtility.decodeBody(body);
         InputStream possiblyLimitedIn =
                 textSizeLimit != NO_TEXT_SIZE_LIMIT ? new BoundedInputStream(in, textSizeLimit) : in;
+
+        String text;
         try {
-            return CharsetSupport.readToString(possiblyLimitedIn, charset);
+            text = CharsetSupport.readToString(possiblyLimitedIn, charset);
         } finally {
             try {
                 MimeUtility.closeInputStreamWithoutDeletingTemporaryFiles(in);
             } catch (IOException e) { /* Ignore */ }
+        }
+
+        FormatFlowedResult result = FormatFlowedHelper.checkFormatFlowed(part.getContentType());
+        if (result.isFormatFlowed()) {
+            return FlowedMessageUtils.deflow(text, result.isDelSp());
+        } else {
+            return text;
         }
     }
 
@@ -196,12 +207,7 @@ public class MessageExtractor {
             String mimeType = part.getMimeType();
             Viewable viewable;
             if (isSameMimeType(mimeType, "text/plain")) {
-                if (isFormatFlowed(part.getContentType())) {
-                    boolean delSp = FlowedMessageUtils.isDelSp(part.getContentType());
-                    viewable = new Flowed(part, delSp);
-                } else {
-                    viewable = new Text(part);
-                }
+                viewable = new Text(part);
             } else {
                 viewable = new Html(part);
             }
@@ -224,21 +230,6 @@ public class MessageExtractor {
         List<Part> nonViewableParts = new ArrayList<>();
         findViewablesAndAttachments(part, viewableParts, nonViewableParts);
         return getParts(viewableParts);
-    }
-
-    /**
-     * Collect attachment parts of a message.
-     * @return A list of parts regarded as attachments.
-     * @throws MessagingException In case of an error.
-     */
-    public static List<Part> collectAttachments(Message message) throws MessagingException {
-        try {
-            List<Part> attachments = new ArrayList<>();
-            findViewablesAndAttachments(message, new ArrayList<>(), attachments);
-            return attachments;
-        } catch (Exception e) {
-            throw new MessagingException("Couldn't collect attachment parts", e);
-        }
     }
 
     /**
@@ -400,7 +391,7 @@ public class MessageExtractor {
      *         A list that will receive the parts that are considered attachments.
      */
     private static void findAttachments(Multipart multipart, Set<Part> knownTextParts,
-            @NonNull List<Part> attachments) {
+            @NotNull List<Part> attachments) {
         for (Part part : multipart.getBodyParts()) {
             Body body = part.getBody();
             if (body instanceof Multipart) {

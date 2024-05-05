@@ -35,7 +35,7 @@ fun SQLiteDatabase.createMessagePart(
         put("mime_type", mimeType)
         put("decoded_body_size", decodedBodySize)
         put("display_name", displayName)
-        put("header", header)
+        put("header", header?.toByteArray())
         put("encoding", encoding)
         put("charset", charset)
         put("data_location", dataLocation)
@@ -71,7 +71,7 @@ fun SQLiteDatabase.readMessageParts(): List<MessagePartEntry> {
                 epilogue = cursor.getStringOrNull("epilogue"),
                 boundary = cursor.getStringOrNull("boundary"),
                 contentId = cursor.getStringOrNull("content_id"),
-                serverExtra = cursor.getStringOrNull("server_extra"),
+                serverExtra = cursor.getStringOrNull("server_extra")
             )
         }
     }

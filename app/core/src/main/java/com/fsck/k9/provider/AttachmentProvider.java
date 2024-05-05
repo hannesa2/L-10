@@ -15,13 +15,13 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.fsck.k9.DI;
+import com.fsck.k9.helper.MimeTypeUtil;
 import com.fsck.k9.mailstore.LocalStoreProvider;
 import timber.log.Timber;
 
 import com.fsck.k9.Account;
 import com.fsck.k9.Preferences;
 import com.fsck.k9.mail.MessagingException;
-import com.fsck.k9.mail.internet.MimeUtility;
 import com.fsck.k9.mailstore.LocalStore;
 import com.fsck.k9.mailstore.LocalStore.AttachmentInfo;
 import org.openintents.openpgp.util.OpenPgpApi.OpenPgpDataSource;
@@ -96,7 +96,7 @@ public class AttachmentProvider extends ContentProvider {
 
         final AttachmentInfo attachmentInfo;
         try {
-            final Account account = Preferences.getPreferences(getContext()).getAccount(accountUuid);
+            final Account account = Preferences.getPreferences().getAccount(accountUuid);
             attachmentInfo = DI.get(LocalStoreProvider.class).getInstance(account).getAttachmentInfo(id);
         } catch (MessagingException e) {
             Timber.e(e, "Unable to retrieve attachment info from local store for ID: %s", id);
@@ -143,7 +143,7 @@ public class AttachmentProvider extends ContentProvider {
 
     private String getType(String accountUuid, String id, String mimeType) {
         String type;
-        final Account account = Preferences.getPreferences(getContext()).getAccount(accountUuid);
+        final Account account = Preferences.getPreferences().getAccount(accountUuid);
 
         try {
             final LocalStore localStore = DI.get(LocalStoreProvider.class).getInstance(account);
@@ -156,7 +156,7 @@ public class AttachmentProvider extends ContentProvider {
             }
         } catch (MessagingException e) {
             Timber.e(e, "Unable to retrieve LocalStore for %s", account);
-            type = MimeUtility.DEFAULT_ATTACHMENT_MIME_TYPE;
+            type = MimeTypeUtil.DEFAULT_ATTACHMENT_MIME_TYPE;
         }
 
         return type;
@@ -182,7 +182,7 @@ public class AttachmentProvider extends ContentProvider {
 
     @Nullable
     private OpenPgpDataSource getAttachmentDataSource(String accountUuid, String attachmentId) throws MessagingException {
-        final Account account = Preferences.getPreferences(getContext()).getAccount(accountUuid);
+        final Account account = Preferences.getPreferences().getAccount(accountUuid);
         LocalStore localStore = DI.get(LocalStoreProvider.class).getInstance(account);
         return localStore.getAttachmentDataSource(attachmentId);
     }

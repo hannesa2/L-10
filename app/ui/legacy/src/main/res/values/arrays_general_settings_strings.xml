@@ -23,6 +23,7 @@
         <item>Ɛʋɛ</item>
         <item>Français</item>
         <item>Français (Canada)</item>
+        <item>Frysk</item>
         <item>Fulfulde, Pulaar, Pular</item>
         <item>Gaeilge</item>
         <item>Gàidhlig</item>
@@ -47,7 +48,6 @@
         <item>Polski</item>
         <item>Português</item>
         <item>Português (Brasil)</item>
-        <item>Pyccĸий</item>
         <item>Română</item>
         <item>Shqip</item>
         <item>Slovenčina</item>
@@ -66,6 +66,7 @@
         <item>Кыргыз</item>
         <item>Қазақ</item>
         <item>Македонски</item>
+        <item>Русский</item>
         <item>Српски</item>
         <item>Українська</item>
         <item>Հայերեն</item>
@@ -119,12 +120,6 @@
         <item>6</item>
     </string-array>
 
-    <string-array name="notification_hide_subject_entries">
-        <item name="1">@string/global_settings_notification_hide_subject_never</item>
-        <item name="2">@string/global_settings_notification_hide_subject_when_locked</item>
-        <item name="3">@string/global_settings_notification_hide_subject_always</item>
-    </string-array>
-
     <string-array name="notification_quick_delete_entries">
         <item name="1">@string/global_settings_notification_quick_delete_never</item>
         <item name="2">@string/global_settings_notification_quick_delete_when_single_msg</item>
@@ -162,9 +157,15 @@
         <item>@string/spam_action</item>
     </string-array>
 
-    <string-array name="volume_navigation_entries">
-        <item>@string/volume_navigation_message</item>
-        <item>@string/volume_navigation_list</item>
+    <string-array name="swipe_action_names">
+        <item>@string/general_settings_swipe_action_none</item>
+        <item>@string/general_settings_swipe_action_toggle_selection</item>
+        <item>@string/general_settings_swipe_action_toggle_read</item>
+        <item>@string/general_settings_swipe_action_toggle_star</item>
+        <item>@string/general_settings_swipe_action_archive</item>
+        <item>@string/general_settings_swipe_action_delete</item>
+        <item>@string/general_settings_swipe_action_spam</item>
+        <item>@string/general_settings_swipe_action_move</item>
     </string-array>
 
 </resources>

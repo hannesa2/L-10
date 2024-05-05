@@ -1,12 +1,14 @@
 package com.fsck.k9.controller
 
 import com.fsck.k9.Account
+import com.fsck.k9.Account.Expunge
 import com.fsck.k9.K9
 import com.fsck.k9.backend.api.Backend
 import com.fsck.k9.controller.MessagingControllerCommands.PendingAppend
 import com.fsck.k9.controller.MessagingControllerCommands.PendingReplace
 import com.fsck.k9.mail.FetchProfile
 import com.fsck.k9.mail.Message
+import com.fsck.k9.mail.MessageDownloadState
 import com.fsck.k9.mail.MessagingException
 import com.fsck.k9.mailstore.LocalFolder
 import com.fsck.k9.mailstore.LocalMessage
@@ -73,8 +75,10 @@ internal class DraftOperations(
             messagingController.queuePendingCommand(account, command)
         } else {
             val fakeMessageServerId = messageStore.getMessageServerId(messageId)
-            val command = PendingAppend.create(folderId, fakeMessageServerId)
-            messagingController.queuePendingCommand(account, command)
+            if (fakeMessageServerId != null) {
+                val command = PendingAppend.create(folderId, fakeMessageServerId)
+                messagingController.queuePendingCommand(account, command)
+            }
         }
 
         messagingController.processPendingCommands(account)
@@ -113,7 +117,7 @@ internal class DraftOperations(
             uploadMessage(backend, account, localFolder, localMessage)
         }
 
-        deleteMessage(backend, localFolder, command.deleteMessageId)
+        deleteMessage(backend, account, localFolder, command.deleteMessageId)
     }
 
     private fun uploadMessage(
@@ -150,7 +154,7 @@ internal class DraftOperations(
         }
     }
 
-    private fun deleteMessage(backend: Backend, localFolder: LocalFolder, messageId: Long) {
+    private fun deleteMessage(backend: Backend, account: Account, localFolder: LocalFolder, messageId: Long) {
         val messageServerId = localFolder.getMessageUidById(messageId) ?: run {
             Timber.i("Couldn't find local copy of message [ID: %d] to be deleted. Skipping delete.", messageId)
             return
@@ -160,10 +164,14 @@ internal class DraftOperations(
         val folderServerId = localFolder.serverId
         backend.deleteMessages(folderServerId, messageServerIds)
 
+        if (backend.supportsExpunge && account.expungePolicy == Expunge.EXPUNGE_IMMEDIATELY) {
+            backend.expungeMessages(folderServerId, messageServerIds)
+        }
+
         messagingController.destroyPlaceholderMessages(localFolder, messageServerIds)
     }
 
     private fun Message.toSaveMessageData(subject: String?): SaveMessageData {
-        return saveMessageDataCreator.createSaveMessageData(this, partialMessage = false, subject)
+        return saveMessageDataCreator.createSaveMessageData(this, MessageDownloadState.FULL, subject)
     }
 }

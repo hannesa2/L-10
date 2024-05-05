@@ -1,81 +1,117 @@
-apply plugin: 'com.android.application'
-apply plugin: 'org.jetbrains.kotlin.android'
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+}
 
 if (rootProject.testCoverage) {
     apply plugin: 'jacoco'
 }
 
 dependencies {
+    coreLibraryDesugaring libs.desugar
+
     implementation project(":app:ui:legacy")
+    implementation project(":app:ui:message-list-widget")
     implementation project(":app:core")
     implementation project(":app:storage")
     implementation project(":app:crypto-openpgp")
     implementation project(":backend:imap")
     implementation project(":backend:pop3")
     implementation project(":backend:webdav")
+    debugImplementation project(":backend:demo")
 
-    implementation "androidx.appcompat:appcompat:${versions.androidxAppCompat}"
-    implementation "androidx.core:core-ktx:${versions.androidxCore}"
-    implementation "com.takisoft.preferencex:preferencex:${versions.preferencesFix}"
-    implementation "com.jakewharton.timber:timber:${versions.timber}"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${versions.kotlinCoroutines}"
+    implementation libs.androidx.appcompat
+    implementation libs.androidx.core.ktx
+    implementation libs.androidx.work.ktx
+    implementation libs.preferencex
+    implementation libs.timber
+    implementation libs.kotlinx.coroutines.core
 
-    implementation "com.github.bumptech.glide:glide:${versions.glide}"
-    annotationProcessor "com.github.bumptech.glide:compiler:${versions.glide}"
+    implementation libs.glide
+    annotationProcessor libs.glide.compiler
 
     if (project.hasProperty('k9mail.enableLeakCanary') && project.property('k9mail.enableLeakCanary') == "true") {
-        debugImplementation 'com.squareup.leakcanary:leakcanary-android:2.4'
+        debugImplementation libs.leakcanary.android
     }
 
     // Required for DependencyInjectionTest to be able to resolve OpenPgpApiManager
     testImplementation project(':plugins:openpgp-api-lib:openpgp-api')
 
-    testImplementation "org.robolectric:robolectric:${versions.robolectric}"
-    testImplementation "junit:junit:${versions.junit}"
-    testImplementation "com.google.truth:truth:${versions.truth}"
-    testImplementation "org.mockito:mockito-core:${versions.mockito}"
-    testImplementation "org.mockito.kotlin:mockito-kotlin:${versions.mockitoKotlin}"
-    testImplementation "org.koin:koin-test:${versions.koin}"
+    testImplementation libs.robolectric
+    testImplementation libs.junit
+    testImplementation libs.truth
+    testImplementation libs.mockito.inline
+    testImplementation libs.mockito.kotlin
+    testImplementation libs.koin.test
+    testImplementation libs.koin.test.junit4
 }
 
 android {
-    compileSdkVersion buildConfig.compileSdk
-    buildToolsVersion buildConfig.buildTools
+    namespace 'com.fsck.k9'
 
     defaultConfig {
-        applicationId "com.fsck.k9"
+        applicationId "com.fsck.l10"
         testApplicationId "com.fsck.k9.tests"
 
-        versionCode 27034
-        versionName '5.734'
+        versionCode getGitCommitCount()
+        versionName getTag()
+        setProperty("archivesBaseName", "L10-" + versionName)
 
         // Keep in sync with the resource string array 'supported_languages'
         resConfigs "in", "br", "ca", "cs", "cy", "da", "de", "et", "en", "en_GB", "es", "eo", "eu", "fr", "gd", "gl",
                 "hr", "is", "it", "lv", "lt", "hu", "nl", "nb", "pl", "pt_PT", "pt_BR", "ru", "ro", "sq", "sk", "sl",
-                "fi", "sv", "tr", "el", "be", "bg", "sr", "uk", "iw", "ar", "fa", "ml", "ko", "zh_CN", "zh_TW", "ja"
+                "fi", "sv", "tr", "el", "be", "bg", "sr", "uk", "iw", "ar", "fa", "ml", "ko", "zh_CN", "zh_TW", "ja",
+                "fy"
+    }
 
-        minSdkVersion buildConfig.minSdk
-        targetSdkVersion buildConfig.targetSdk
-
-        vectorDrawables.useSupportLibrary = true
-
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    buildFeatures {
+        buildConfig true
     }
 
     signingConfigs {
-        release
+        release {
+            storeFile file('../signing/release.keystore')
+            storePassword System.getenv("KEYSTORE_PASS")
+            keyAlias System.getenv("ALIAS_NAME")
+            keyPassword System.getenv("ALIAS_PASS")
+        }
+        debugCI {
+            storeFile file('./debug.keystore')
+            storePassword "android"
+            keyPassword "android"
+            keyAlias "androiddebugkey"
+        }
+    }
+
+    compileOptions {
+        coreLibraryDesugaringEnabled true
     }
 
     buildTypes {
         release {
-            if (project.hasProperty('storeFile')) {
-                signingConfig signingConfigs.release
+            if (file('../signing/release.keystore').exists()) {
+                if (System.getenv("KEYSTORE_PASS") == null || System.getenv("ALIAS_NAME") == null || System.getenv("ALIAS_PASS") == null) {
+                    println "Keystore exists, but I use DEBUG signing because variables are not set !"
+                    signingConfig signingConfigs.debug
+                } else {
+                    println "Keystore exists and I use RELEASE signing"
+                    signingConfig signingConfigs.release
+                }
+            } else {
+                println "I run somewhere else and I use debug signing"
+                signingConfig signingConfigs.debug
             }
 
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
 
-            buildConfigField "boolean", "DEVELOPER_MODE", "false"
+            buildConfigField "String", "OAUTH_GMAIL_CLIENT_ID", "\"262622259280-hhmh92rhklkg2k1tjil69epo0o9a12jm.apps.googleusercontent.com\""
+            buildConfigField "String", "OAUTH_YAHOO_CLIENT_ID", "\"dj0yJmk9aHNUb3d2MW5TQnpRJmQ9WVdrOWVYbHpaRWM0YkdnbWNHbzlNQT09JnM9Y29uc3VtZXJzZWNyZXQmc3Y9MCZ4PWIz\""
+            buildConfigField "String", "OAUTH_AOL_CLIENT_ID", "\"dj0yJmk9dUNqYXZhYWxOYkdRJmQ9WVdrOU1YQnZVRFZoY1ZrbWNHbzlNQT09JnM9Y29uc3VtZXJzZWNyZXQmc3Y9MCZ4PWIw\""
+            buildConfigField "String", "OAUTH_MICROSOFT_CLIENT_ID", "\"e647013a-ada4-4114-b419-e43d250f99c5\""
+            buildConfigField "String", "OAUTH_MICROSOFT_REDIRECT_URI", "\"msauth://com.fsck.k9/Dx8yUsuhyU3dYYba1aA16Wxu5eM%3D\""
+
+            manifestPlaceholders = ['appAuthRedirectScheme': 'com.fsck.k9']
         }
 
         debug {
@@ -84,62 +120,50 @@ android {
 
             minifyEnabled false
 
-            buildConfigField "boolean", "DEVELOPER_MODE", "true"
+            buildConfigField "String", "OAUTH_GMAIL_CLIENT_ID", "\"262622259280-5qb3vtj68d5dtudmaif4g9vd3cpar8r3.apps.googleusercontent.com\""
+            buildConfigField "String", "OAUTH_YAHOO_CLIENT_ID", "\"dj0yJmk9ejRCRU1ybmZjQlVBJmQ9WVdrOVVrZEViak4xYmxZbWNHbzlNQT09JnM9Y29uc3VtZXJzZWNyZXQmc3Y9MCZ4PTZj\""
+            buildConfigField "String", "OAUTH_AOL_CLIENT_ID", "\"dj0yJmk9cHYydkJkTUxHcXlYJmQ9WVdrOWVHZHhVVXN4VVV3bWNHbzlNQT09JnM9Y29uc3VtZXJzZWNyZXQmc3Y9MCZ4PTdm\""
+            buildConfigField "String", "OAUTH_MICROSOFT_CLIENT_ID", "\"e647013a-ada4-4114-b419-e43d250f99c5\""
+            buildConfigField "String", "OAUTH_MICROSOFT_REDIRECT_URI", "\"msauth://com.fsck.k9.debug/VZF2DYuLYAu4TurFd6usQB2JPts%3D\""
+
+            manifestPlaceholders = ['appAuthRedirectScheme': 'com.fsck.k9.debug']
+
+            if (System.getenv("CI") == "true") { // Github action
+                signingConfig signingConfigs.debugCI
+            }
         }
     }
 
-    // Do not abort build if lint finds errors
-    lintOptions {
-        abortOnError false
-        lintConfig file("$rootProject.projectDir/config/lint/lint.xml")
+    lint {
+        checkDependencies true
     }
 
     packagingOptions {
-        exclude 'META-INF/DEPENDENCIES'
-        exclude 'META-INF/LICENSE'
-        exclude 'META-INF/LICENSE.txt'
-        exclude 'META-INF/NOTICE'
-        exclude 'META-INF/NOTICE.txt'
-        exclude 'META-INF/README'
-        exclude 'META-INF/README.md'
-        exclude 'META-INF/CHANGES'
-        exclude 'LICENSE.txt'
-        exclude 'META-INF/*.kotlin_module'
-        exclude 'META-INF/*.version'
-        exclude 'kotlin/**'
-        exclude 'DebugProbesKt.bin'
+        jniLibs {
+            excludes += ['kotlin/**']
+        }
+
+        resources {
+            excludes += [
+                'META-INF/DEPENDENCIES',
+                'META-INF/LICENSE',
+                'META-INF/LICENSE.txt',
+                'META-INF/NOTICE',
+                'META-INF/NOTICE.txt',
+                'META-INF/README',
+                'META-INF/README.md',
+                'META-INF/CHANGES',
+                'LICENSE.txt',
+                'META-INF/*.kotlin_module',
+                'META-INF/*.version',
+                'kotlin/**',
+                'DebugProbesKt.bin'
+            ]
+        }
     }
 
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
     }
-
-    compileOptions {
-        sourceCompatibility javaVersion
-        targetCompatibility javaVersion
-    }
-
-    kotlinOptions {
-        jvmTarget = kotlinJvmVersion
-    }
-
-    testOptions {
-        unitTests {
-            includeAndroidResources = true
-        }
-    }
-}
-
-if (project.hasProperty('keyAlias')) {
-    android.signingConfigs.release.keyAlias = keyAlias
-}
-if (project.hasProperty('keyPassword')) {
-    android.signingConfigs.release.keyPassword = keyPassword
-}
-if (project.hasProperty('storeFile')) {
-    android.signingConfigs.release.storeFile = file(storeFile)
-}
-if (project.hasProperty('storePassword')) {
-    android.signingConfigs.release.storePassword = storePassword
 }

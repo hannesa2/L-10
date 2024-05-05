@@ -2,32 +2,45 @@ package com.fsck.k9
 
 import android.app.Application
 import android.content.res.Configuration
+import android.content.res.Resources
+import app.k9mail.ui.widget.list.MessageListWidgetManager
+import com.fsck.k9.activity.LauncherShortcuts
 import com.fsck.k9.activity.MessageCompose
 import com.fsck.k9.controller.MessagingController
-import com.fsck.k9.external.MessageProvider
+import com.fsck.k9.job.WorkManagerConfigurationProvider
+import com.fsck.k9.notification.NotificationChannelManager
+import com.fsck.k9.provider.UnreadWidgetProvider
 import com.fsck.k9.ui.base.AppLanguageManager
 import com.fsck.k9.ui.base.ThemeManager
 import com.fsck.k9.ui.base.extensions.currentLocale
+import com.fsck.k9.widget.list.MessageListWidgetProvider
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.plus
 import org.koin.android.ext.android.inject
 import timber.log.Timber
+import androidx.work.Configuration as WorkManagerConfiguration
 
-class App : Application() {
+class App : Application(), WorkManagerConfiguration.Provider {
     private val messagingController: MessagingController by inject()
     private val messagingListenerProvider: MessagingListenerProvider by inject()
     private val themeManager: ThemeManager by inject()
     private val appLanguageManager: AppLanguageManager by inject()
+    private val notificationChannelManager: NotificationChannelManager by inject()
+    private val messageListWidgetManager: MessageListWidgetManager by inject()
+    private val workManagerConfigurationProvider: WorkManagerConfigurationProvider by inject()
+
     private val appCoroutineScope: CoroutineScope = GlobalScope + Dispatchers.Main
+    private var appLanguageManagerInitialized = false
 
     override fun onCreate() {
-        Core.earlyInit(this)
+        Core.earlyInit()
 
         super.onCreate()
 
@@ -35,9 +48,10 @@ class App : Application() {
 
         K9.init(this)
         Core.init(this)
-        MessageProvider.init()
         initializeAppLanguage()
+        updateNotificationChannelsOnAppLanguageChanges()
         themeManager.init()
+        messageListWidgetManager.init()
 
         messagingListenerProvider.listeners.forEach { listener ->
             messagingController.addListener(listener)
@@ -46,13 +60,14 @@ class App : Application() {
 
     private fun initializeAppLanguage() {
         appLanguageManager.init()
-        applyOverrideLocale()
+        applyOverrideLocaleToConfiguration()
+        appLanguageManagerInitialized = true
         listenForAppLanguageChanges()
     }
 
-    private fun applyOverrideLocale() {
+    private fun applyOverrideLocaleToConfiguration() {
         appLanguageManager.getOverrideLocale()?.let { overrideLocale ->
-            updateConfigurationWithLocale(resources.configuration, overrideLocale)
+            updateConfigurationWithLocale(superResources.configuration, overrideLocale)
         }
     }
 
@@ -61,14 +76,14 @@ class App : Application() {
             .drop(1) // We already applied the initial value
             .onEach { overrideLocale ->
                 val locale = overrideLocale ?: Locale.getDefault()
-                updateConfigurationWithLocale(resources.configuration, locale)
+                updateConfigurationWithLocale(superResources.configuration, locale)
             }
             .launchIn(appCoroutineScope)
     }
 
     override fun onConfigurationChanged(newConfiguration: Configuration) {
-        applyOverrideLocale()
-        super.onConfigurationChanged(resources.configuration)
+        applyOverrideLocaleToConfiguration()
+        super.onConfigurationChanged(superResources.configuration)
     }
 
     private fun updateConfigurationWithLocale(configuration: Configuration, locale: Locale) {
@@ -79,12 +94,52 @@ class App : Application() {
         }
 
         @Suppress("DEPRECATION")
-        resources.updateConfiguration(newConfiguration, resources.displayMetrics)
+        superResources.updateConfiguration(newConfiguration, superResources.displayMetrics)
+    }
+
+    private val superResources: Resources
+        get() = super.getResources()
+
+    // Creating a WebView instance triggers something that will cause the configuration of the Application's Resources
+    // instance to be reset to the default, i.e. not containing our locale override. Unfortunately, we're not notified
+    // about this event. So we're checking each time someone asks for the Resources instance whether we need to change
+    // the configuration again. Luckily, right now (Android 11), the platform is calling this method right after
+    // resetting the configuration.
+    override fun getResources(): Resources {
+        val resources = super.getResources()
+
+        if (appLanguageManagerInitialized) {
+            appLanguageManager.getOverrideLocale()?.let { overrideLocale ->
+                if (resources.configuration.currentLocale != overrideLocale) {
+                    Timber.w("Resources configuration was reset. Re-applying locale override.")
+                    appLanguageManager.applyOverrideLocale()
+                    applyOverrideLocaleToConfiguration()
+                }
+            }
+        }
+
+        return resources
+    }
+
+    private fun updateNotificationChannelsOnAppLanguageChanges() {
+        appLanguageManager.appLocale
+            .distinctUntilChanged()
+            .onEach { notificationChannelManager.updateChannels() }
+            .launchIn(appCoroutineScope)
+    }
+
+    override fun getWorkManagerConfiguration(): WorkManagerConfiguration {
+        return workManagerConfigurationProvider.getConfiguration()
     }
 
     companion object {
         val appConfig = AppConfig(
-            componentsToDisable = listOf(MessageCompose::class.java)
+            componentsToDisable = listOf(
+                MessageCompose::class.java,
+                LauncherShortcuts::class.java,
+                UnreadWidgetProvider::class.java,
+                MessageListWidgetProvider::class.java
+            )
         )
     }
 }

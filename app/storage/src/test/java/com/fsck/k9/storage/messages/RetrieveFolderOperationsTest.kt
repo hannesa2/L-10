@@ -3,9 +3,14 @@ package com.fsck.k9.storage.messages
 import com.fsck.k9.Account.FolderMode
 import com.fsck.k9.mail.FolderClass
 import com.fsck.k9.mail.FolderType
+import com.fsck.k9.mailstore.FolderNotFoundException
+import com.fsck.k9.mailstore.MoreMessages
 import com.fsck.k9.mailstore.toDatabaseFolderType
+import com.fsck.k9.search.LocalSearch
+import com.fsck.k9.search.SearchSpecification
 import com.fsck.k9.storage.RobolectricTest
 import com.google.common.truth.Truth.assertThat
+import org.junit.Assert.fail
 import org.junit.Test
 
 class RetrieveFolderOperationsTest : RobolectricTest() {
@@ -192,7 +197,7 @@ class RetrieveFolderOperationsTest : RobolectricTest() {
         val (folderId1, folderId2, _) = listOf(
             sqliteDatabase.createFolder(name = "Folder 1", displayClass = "FIRST_CLASS"),
             sqliteDatabase.createFolder(name = "Folder 2", displayClass = "SECOND_CLASS"),
-            sqliteDatabase.createFolder(name = "Folder 3", displayClass = "NO_CLASS"),
+            sqliteDatabase.createFolder(name = "Folder 3", displayClass = "NO_CLASS")
         )
 
         val result = retrieveFolderOperations.getDisplayFolders(
@@ -210,7 +215,7 @@ class RetrieveFolderOperationsTest : RobolectricTest() {
         val (folderId1, _, folderId3) = listOf(
             sqliteDatabase.createFolder(name = "Folder 1", displayClass = "FIRST_CLASS"),
             sqliteDatabase.createFolder(name = "Folder 2", displayClass = "SECOND_CLASS"),
-            sqliteDatabase.createFolder(name = "Folder 3", displayClass = "NO_CLASS"),
+            sqliteDatabase.createFolder(name = "Folder 3", displayClass = "NO_CLASS")
         )
 
         val result = retrieveFolderOperations.getDisplayFolders(
@@ -233,7 +238,7 @@ class RetrieveFolderOperationsTest : RobolectricTest() {
         val (folderId1, folderId2, _) = listOf(
             sqliteDatabase.createFolder(name = "Folder 1", displayClass = "FIRST_CLASS"),
             sqliteDatabase.createFolder(name = "Folder 2", displayClass = "SECOND_CLASS"),
-            sqliteDatabase.createFolder(name = "Folder 3", displayClass = "NO_CLASS"),
+            sqliteDatabase.createFolder(name = "Folder 3", displayClass = "NO_CLASS")
         )
 
         val result = retrieveFolderOperations.getDisplayFolders(
@@ -269,7 +274,7 @@ class RetrieveFolderOperationsTest : RobolectricTest() {
             displayMode = FolderMode.ALL,
             outboxFolderId = folderId2
         ) { folder ->
-            Triple(folder.id, folder.name, folder.messageCount)
+            Triple(folder.id, folder.name, folder.unreadMessageCount)
         }
 
         assertThat(result).hasSize(4)
@@ -287,7 +292,7 @@ class RetrieveFolderOperationsTest : RobolectricTest() {
     fun `get folder id`() {
         val (_, folderId2) = listOf(
             sqliteDatabase.createFolder(serverId = "folder1"),
-            sqliteDatabase.createFolder(serverId = "folder2"),
+            sqliteDatabase.createFolder(serverId = "folder2")
         )
 
         val result = retrieveFolderOperations.getFolderId(folderServerId = "folder2")
@@ -301,4 +306,181 @@ class RetrieveFolderOperationsTest : RobolectricTest() {
 
         assertThat(result).isNull()
     }
+
+    @Test
+    fun `get folder server id`() {
+        val (_, folderId2) = listOf(
+            sqliteDatabase.createFolder(serverId = "folder1"),
+            sqliteDatabase.createFolder(serverId = "folder2")
+        )
+
+        val result = retrieveFolderOperations.getFolderServerId(folderId2)
+
+        assertThat(result).isEqualTo("folder2")
+    }
+
+    @Test
+    fun `get folder server id should return null if no folder was found`() {
+        val result = retrieveFolderOperations.getFolderServerId(folderId = 1)
+
+        assertThat(result).isNull()
+    }
+
+    @Test
+    fun `get message count from empty folder`() {
+        val folderId = sqliteDatabase.createFolder()
+
+        val result = retrieveFolderOperations.getMessageCount(folderId)
+
+        assertThat(result).isEqualTo(0)
+    }
+
+    @Test
+    fun `get message count from non-existent folder`() {
+        val result = retrieveFolderOperations.getMessageCount(23)
+
+        assertThat(result).isEqualTo(0)
+    }
+
+    @Test
+    fun `get message count from non-empty folder`() {
+        val folderId = sqliteDatabase.createFolder()
+        sqliteDatabase.createMessage(folderId = folderId)
+        sqliteDatabase.createMessage(folderId = folderId)
+
+        val result = retrieveFolderOperations.getMessageCount(folderId)
+
+        assertThat(result).isEqualTo(2)
+    }
+
+    @Test
+    fun `get unread message count from empty folder`() {
+        val folderId = sqliteDatabase.createFolder()
+
+        val result = retrieveFolderOperations.getUnreadMessageCount(folderId)
+
+        assertThat(result).isEqualTo(0)
+    }
+
+    @Test
+    fun `get unread message count from non-existent folder`() {
+        val result = retrieveFolderOperations.getUnreadMessageCount(23)
+
+        assertThat(result).isEqualTo(0)
+    }
+
+    @Test
+    fun `get unread message count from non-empty folder`() {
+        val folderId = sqliteDatabase.createFolder()
+        sqliteDatabase.createMessage(folderId = folderId, read = false)
+        sqliteDatabase.createMessage(folderId = folderId, read = false)
+        sqliteDatabase.createMessage(folderId = folderId, read = true)
+
+        val result = retrieveFolderOperations.getUnreadMessageCount(folderId)
+
+        assertThat(result).isEqualTo(2)
+    }
+
+    @Test
+    fun `get unread message count with condition from empty folder`() {
+        sqliteDatabase.createFolder(integrate = true)
+
+        val result = retrieveFolderOperations.getUnreadMessageCount(unifiedInboxConditions)
+
+        assertThat(result).isEqualTo(0)
+    }
+
+    @Test
+    fun `get unread message count with condition from non-existent folder`() {
+        val result = retrieveFolderOperations.getUnreadMessageCount(unifiedInboxConditions)
+
+        assertThat(result).isEqualTo(0)
+    }
+
+    @Test
+    fun `get unread message count with condition from non-empty folder`() {
+        val folderId1 = sqliteDatabase.createFolder(integrate = true)
+        sqliteDatabase.createMessage(folderId = folderId1, read = false)
+        sqliteDatabase.createMessage(folderId = folderId1, read = false)
+        sqliteDatabase.createMessage(folderId = folderId1, read = true)
+        val folderId2 = sqliteDatabase.createFolder(integrate = true)
+        sqliteDatabase.createMessage(folderId = folderId2, read = false)
+        sqliteDatabase.createMessage(folderId = folderId2, read = true)
+
+        val result = retrieveFolderOperations.getUnreadMessageCount(unifiedInboxConditions)
+
+        assertThat(result).isEqualTo(3)
+    }
+
+    @Test
+    fun `get starred message count with condition from empty folder`() {
+        sqliteDatabase.createFolder(integrate = true)
+
+        val result = retrieveFolderOperations.getStarredMessageCount(unifiedInboxConditions)
+
+        assertThat(result).isEqualTo(0)
+    }
+
+    @Test
+    fun `get starred message count with condition from non-existent folder`() {
+        val result = retrieveFolderOperations.getStarredMessageCount(unifiedInboxConditions)
+
+        assertThat(result).isEqualTo(0)
+    }
+
+    @Test
+    fun `get starred message count with condition from non-empty folder`() {
+        val folderId1 = sqliteDatabase.createFolder(integrate = true)
+        sqliteDatabase.createMessage(folderId = folderId1, flagged = false)
+        sqliteDatabase.createMessage(folderId = folderId1, flagged = true)
+        val folderId2 = sqliteDatabase.createFolder(integrate = true)
+        sqliteDatabase.createMessage(folderId = folderId2, flagged = true)
+        sqliteDatabase.createMessage(folderId = folderId2, flagged = true)
+        sqliteDatabase.createMessage(folderId = folderId2, flagged = false)
+
+        val result = retrieveFolderOperations.getStarredMessageCount(unifiedInboxConditions)
+
+        assertThat(result).isEqualTo(3)
+    }
+
+    @Test
+    fun `get 'more messages' value from non-existent folder`() {
+        try {
+            retrieveFolderOperations.hasMoreMessages(23)
+            fail("Expected exception")
+        } catch (e: FolderNotFoundException) {
+            assertThat(e.folderId).isEqualTo(23)
+        }
+    }
+
+    @Test
+    fun `get 'more messages' value from folder with value 'unknown'`() {
+        val folderId = sqliteDatabase.createFolder(moreMessages = "unknown")
+
+        val result = retrieveFolderOperations.hasMoreMessages(folderId)
+
+        assertThat(result).isEqualTo(MoreMessages.UNKNOWN)
+    }
+
+    @Test
+    fun `get 'more messages' value from folder with value 'false'`() {
+        val folderId = sqliteDatabase.createFolder(moreMessages = "false")
+
+        val result = retrieveFolderOperations.hasMoreMessages(folderId)
+
+        assertThat(result).isEqualTo(MoreMessages.FALSE)
+    }
+
+    @Test
+    fun `get 'more messages' value from folder with value 'true'`() {
+        val folderId = sqliteDatabase.createFolder(moreMessages = "true")
+
+        val result = retrieveFolderOperations.hasMoreMessages(folderId)
+
+        assertThat(result).isEqualTo(MoreMessages.TRUE)
+    }
+
+    private val unifiedInboxConditions = LocalSearch().apply {
+        and(SearchSpecification.SearchField.INTEGRATE, "1", SearchSpecification.Attribute.EQUALS)
+    }.conditions
 }

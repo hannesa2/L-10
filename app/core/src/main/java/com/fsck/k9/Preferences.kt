@@ -1,6 +1,5 @@
 package com.fsck.k9
 
-import android.content.Context
 import androidx.annotation.GuardedBy
 import androidx.annotation.RestrictTo
 import com.fsck.k9.mail.MessagingException
@@ -13,15 +12,26 @@ import java.util.HashMap
 import java.util.LinkedList
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArraySet
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.trySendBlocking
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOn
 import timber.log.Timber
 
 class Preferences internal constructor(
-    private val context: Context,
     private val storagePersister: StoragePersister,
     private val localStoreProvider: LocalStoreProvider,
-    private val accountPreferenceSerializer: AccountPreferenceSerializer
+    private val accountPreferenceSerializer: AccountPreferenceSerializer,
+    private val backgroundDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : AccountManager {
     private val accountLock = Any()
+    private val storageLock = Any()
 
     @GuardedBy("accountLock")
     private var accountsMap: MutableMap<String, Account>? = null
@@ -32,18 +42,24 @@ class Preferences internal constructor(
     @GuardedBy("accountLock")
     private var newAccount: Account? = null
     private val accountsChangeListeners = CopyOnWriteArraySet<AccountsChangeListener>()
-    private val settingsChangeListeners = CopyOnWriteArraySet<SettingsChangeListener>()
     private val accountRemovedListeners = CopyOnWriteArraySet<AccountRemovedListener>()
 
-    val storage = Storage()
+    @GuardedBy("storageLock")
+    private var currentStorage: Storage? = null
 
-    init {
-        val persistedStorageValues = storagePersister.loadValues()
-        storage.replaceAll(persistedStorageValues)
-    }
+    val storage: Storage
+        get() = synchronized(storageLock) {
+            currentStorage ?: storagePersister.loadValues().also { newStorage ->
+                currentStorage = newStorage
+            }
+        }
 
     fun createStorageEditor(): StorageEditor {
-        return storagePersister.createStorageEditor(storage)
+        return storagePersister.createStorageEditor { updater ->
+            synchronized(storageLock) {
+                currentStorage = updater(storage)
+            }
+        }
     }
 
     @RestrictTo(RestrictTo.Scope.TESTS)
@@ -94,8 +110,8 @@ class Preferences internal constructor(
             }
         }
 
-    val availableAccounts: Collection<Account>
-        get() = accounts.filter { it.isAvailable(context) }
+    private val completeAccounts: List<Account>
+        get() = accounts.filter { it.isFinishedSetup }
 
     override fun getAccount(accountUuid: String): Account? {
         synchronized(accountLock) {
@@ -105,6 +121,51 @@ class Preferences internal constructor(
 
             return accountsMap!![accountUuid]
         }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun getAccountFlow(accountUuid: String): Flow<Account> {
+        return callbackFlow {
+            val initialAccount = getAccount(accountUuid)
+            if (initialAccount == null) {
+                close()
+                return@callbackFlow
+            }
+
+            send(initialAccount)
+
+            val listener = AccountsChangeListener {
+                val account = getAccount(accountUuid)
+                if (account != null) {
+                    trySendBlocking(account)
+                } else {
+                    close()
+                }
+            }
+            addOnAccountsChangeListener(listener)
+
+            awaitClose {
+                removeOnAccountsChangeListener(listener)
+            }
+        }.buffer(capacity = Channel.CONFLATED)
+            .flowOn(backgroundDispatcher)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun getAccountsFlow(): Flow<List<Account>> {
+        return callbackFlow {
+            send(completeAccounts)
+
+            val listener = AccountsChangeListener {
+                trySendBlocking(completeAccounts)
+            }
+            addOnAccountsChangeListener(listener)
+
+            awaitClose {
+                removeOnAccountsChangeListener(listener)
+            }
+        }.buffer(capacity = Channel.CONFLATED)
+            .flowOn(backgroundDispatcher)
     }
 
     fun newAccount(): Account {
@@ -139,45 +200,20 @@ class Preferences internal constructor(
         notifyAccountsChangeListeners()
     }
 
-    var defaultAccount: Account?
-        get() {
-            return getDefaultAccountOrNull() ?: availableAccounts.firstOrNull()?.also { newDefaultAccount ->
-                defaultAccount = newDefaultAccount
-            }
-        }
-        set(account) {
-            requireNotNull(account)
+    val defaultAccount: Account?
+        get() = accounts.firstOrNull()
 
-            createStorageEditor()
-                .putString("defaultAccountUuid", account.uuid)
-                .commit()
-        }
-
-    private fun getDefaultAccountOrNull(): Account? {
-        return synchronized(accountLock) {
-            storage.getString("defaultAccountUuid", null)?.let { defaultAccountUuid ->
-                getAccount(defaultAccountUuid)
-            }
-        }
-    }
-
-    fun saveAccount(account: Account) {
+    override fun saveAccount(account: Account) {
         ensureAssignedAccountNumber(account)
         processChangedValues(account)
 
-        val editor = createStorageEditor()
-        accountPreferenceSerializer.save(editor, storage, account)
-        editor.commit()
+        synchronized(accountLock) {
+            val editor = createStorageEditor()
+            accountPreferenceSerializer.save(editor, storage, account)
+            editor.commit()
+        }
 
         notifyAccountsChangeListeners()
-    }
-
-    fun saveSettings() {
-        val editor = createStorageEditor()
-        K9.save(editor)
-        editor.commit()
-
-        notifySettingsChangeListeners()
     }
 
     private fun ensureAssignedAccountNumber(account: Account) {
@@ -233,26 +269,12 @@ class Preferences internal constructor(
         }
     }
 
-    fun addOnAccountsChangeListener(accountsChangeListener: AccountsChangeListener) {
+    override fun addOnAccountsChangeListener(accountsChangeListener: AccountsChangeListener) {
         accountsChangeListeners.add(accountsChangeListener)
     }
 
-    fun removeOnAccountsChangeListener(accountsChangeListener: AccountsChangeListener) {
+    override fun removeOnAccountsChangeListener(accountsChangeListener: AccountsChangeListener) {
         accountsChangeListeners.remove(accountsChangeListener)
-    }
-
-    private fun notifySettingsChangeListeners() {
-        for (listener in settingsChangeListeners) {
-            listener.onSettingsChanged()
-        }
-    }
-
-    fun addSettingsChangeListener(settingsChangeListener: SettingsChangeListener) {
-        settingsChangeListeners.add(settingsChangeListener)
-    }
-
-    fun removeSettingsChangeListener(settingsChangeListener: SettingsChangeListener) {
-        settingsChangeListeners.remove(settingsChangeListener)
     }
 
     private fun notifyAccountRemovedListeners(account: Account) {
@@ -271,8 +293,8 @@ class Preferences internal constructor(
 
     companion object {
         @JvmStatic
-        fun getPreferences(context: Context): Preferences {
-            return DI.get(Preferences::class.java)
+        fun getPreferences(): Preferences {
+            return DI.get()
         }
     }
 }

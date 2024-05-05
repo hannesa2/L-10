@@ -15,13 +15,12 @@ interface Backend {
     val supportsTrashFolder: Boolean
     val supportsSearchByDate: Boolean
     val isPushCapable: Boolean
-    val isDeleteMoveToTrash: Boolean
 
     @Throws(MessagingException::class)
     fun refreshFolderList()
 
     // TODO: Add a way to cancel the sync process
-    fun sync(folder: String, syncConfig: SyncConfig, listener: SyncListener)
+    fun sync(folderServerId: String, syncConfig: SyncConfig, listener: SyncListener)
 
     @Throws(MessagingException::class)
     fun downloadMessage(syncConfig: SyncConfig, folderServerId: String, messageServerId: String)
@@ -97,4 +96,6 @@ interface Backend {
 
     @Throws(MessagingException::class)
     fun checkOutgoingServerSettings()
+
+    fun createPusher(callback: BackendPusherCallback): BackendPusher
 }

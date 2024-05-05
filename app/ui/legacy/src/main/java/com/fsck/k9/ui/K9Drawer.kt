@@ -21,9 +21,12 @@ import com.fsck.k9.mailstore.DisplayFolder
 import com.fsck.k9.mailstore.Folder
 import com.fsck.k9.ui.account.AccountImageLoader
 import com.fsck.k9.ui.account.AccountsViewModel
+import com.fsck.k9.ui.account.DisplayAccount
 import com.fsck.k9.ui.base.Theme
 import com.fsck.k9.ui.base.ThemeManager
+import com.fsck.k9.ui.folders.DisplayUnifiedInbox
 import com.fsck.k9.ui.folders.FolderIconProvider
+import com.fsck.k9.ui.folders.FolderList
 import com.fsck.k9.ui.folders.FolderNameFormatter
 import com.fsck.k9.ui.folders.FoldersViewModel
 import com.fsck.k9.ui.settings.SettingsActivity
@@ -52,12 +55,18 @@ import java.util.ArrayList
 import org.koin.androidx.viewmodel.ext.android.viewModel
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
-import org.koin.core.parameter.parametersOf
+import com.fsck.k9.core.R as CoreR
+import com.mikepenz.materialdrawer.R as MaterialDrawerR
+
+private const val UNREAD_SYMBOL = "\u2B24"
+private const val STARRED_SYMBOL = "\u2605"
+private const val THIN_SPACE = "\u2009"
+private const val EN_SPACE = "\u2000"
 
 class K9Drawer(private val parent: MessageList, savedInstanceState: Bundle?) : KoinComponent {
     private val foldersViewModel: FoldersViewModel by parent.viewModel()
     private val accountsViewModel: AccountsViewModel by parent.viewModel()
-    private val folderNameFormatter: FolderNameFormatter by inject { parametersOf(parent) }
+    private val folderNameFormatter: FolderNameFormatter by inject()
     private val themeManager: ThemeManager by inject()
     private val resources: Resources by inject()
     private val messagingController: MessagingController by inject()
@@ -68,6 +77,7 @@ class K9Drawer(private val parent: MessageList, savedInstanceState: Bundle?) : K
     private val headerView: AccountHeaderView = AccountHeaderView(parent).apply {
         attachToSliderView(this@K9Drawer.sliderView)
         dividerBelowHeader = false
+        displayBadgesOnCurrentProfileImage = false
     }
     private val folderIconProvider: FolderIconProvider = FolderIconProvider(parent.theme)
     private val swipeRefreshLayout: SwipeRefreshLayout
@@ -80,6 +90,7 @@ class K9Drawer(private val parent: MessageList, savedInstanceState: Bundle?) : K
     private var folderBadgeStyle: BadgeStyle? = null
     private var openedAccountUuid: String? = null
     private var openedFolderId: Long? = null
+    private var latestFolderList: FolderList? = null
 
     val layout: DrawerLayout
         get() = drawer
@@ -120,12 +131,12 @@ class K9Drawer(private val parent: MessageList, savedInstanceState: Bundle?) : K
 
         addFooterItems()
 
-        accountsViewModel.accountsLiveData.observeNotNull(parent) { accounts ->
+        accountsViewModel.displayAccountsLiveData.observeNotNull(parent) { accounts ->
             setAccounts(accounts)
         }
 
-        foldersViewModel.getFolderListLiveData().observe(parent) { folders ->
-            setUserFolders(folders)
+        foldersViewModel.getFolderListLiveData().observe(parent) { folderList ->
+            setUserFolders(folderList)
         }
     }
 
@@ -153,32 +164,87 @@ class K9Drawer(private val parent: MessageList, savedInstanceState: Bundle?) : K
         headerView.onAccountHeaderListener = { _, profile, _ ->
             val account = (profile as ProfileDrawerItem).tag as Account
             openedAccountUuid = account.uuid
-            parent.openRealAccount(account)
+            val eventHandled = !parent.openRealAccount(account)
             updateUserAccountsAndFolders(account)
-            true
+
+            eventHandled
         }
     }
 
-    private fun setAccounts(accounts: List<Account>) {
+    private fun buildBadgeText(displayAccount: DisplayAccount): String? {
+        return buildBadgeText(displayAccount.unreadMessageCount, displayAccount.starredMessageCount)
+    }
+
+    private fun buildBadgeText(displayFolder: DisplayFolder): String? {
+        return buildBadgeText(displayFolder.unreadMessageCount, displayFolder.starredMessageCount)
+    }
+
+    private fun buildBadgeText(unifiedInbox: DisplayUnifiedInbox): String? {
+        return buildBadgeText(unifiedInbox.unreadMessageCount, unifiedInbox.starredMessageCount)
+    }
+
+    private fun buildBadgeText(unreadCount: Int, starredCount: Int): String? {
+        return if (K9.isShowStarredCount) {
+            buildBadgeTextWithStarredCount(unreadCount, starredCount)
+        } else {
+            buildBadgeTextWithUnreadCount(unreadCount)
+        }
+    }
+
+    private fun buildBadgeTextWithStarredCount(unreadCount: Int, starredCount: Int): String? {
+        if (unreadCount == 0 && starredCount == 0) return null
+
+        return buildString {
+            val hasUnreadCount = unreadCount > 0
+            if (hasUnreadCount) {
+                append(UNREAD_SYMBOL)
+                append(THIN_SPACE)
+                append(unreadCount)
+            }
+
+            if (starredCount > 0) {
+                if (hasUnreadCount) {
+                    append(EN_SPACE)
+                }
+                append(STARRED_SYMBOL)
+                append(THIN_SPACE)
+                append(starredCount)
+            }
+        }
+    }
+
+    private fun buildBadgeTextWithUnreadCount(unreadCount: Int): String? {
+        return if (unreadCount > 0) unreadCount.toString() else null
+    }
+
+    private fun setAccounts(displayAccounts: List<DisplayAccount>) {
         val oldSelectedBackgroundColor = selectedBackgroundColor
 
         var newActiveProfile: IProfile? = null
-        val accountItems = accounts.map { account ->
-            val drawerId = (account.accountNumber + 1 shl DRAWER_ACCOUNT_SHIFT).toLong()
+        val accountItems = displayAccounts.map { displayAccount ->
+            val account = displayAccount.account
 
             val drawerColors = getDrawerColorsForAccount(account)
             val selectedTextColor = drawerColors.accentColor.toSelectedColorStateList()
 
             val accountItem = ProfileDrawerItem().apply {
-                isNameShown = true
-                nameText = account.description
+                account.name.let { accountName ->
+                    isNameShown = accountName != null
+                    nameText = accountName.orEmpty()
+                }
                 descriptionText = account.email
-                identifier = drawerId
+                identifier = account.drawerId
                 tag = account
                 textColor = selectedTextColor
                 descriptionTextColor = selectedTextColor
                 selectedColorInt = drawerColors.selectedColor
                 icon = ImageHolder(createAccountImageUri(account))
+                buildBadgeText(displayAccount)?.let { text ->
+                    badgeText = text
+                    badgeStyle = BadgeStyle().apply {
+                        textColorStateList = selectedTextColor
+                    }
+                }
             }
 
             if (account.uuid == openedAccountUuid) {
@@ -198,7 +264,7 @@ class K9Drawer(private val parent: MessageList, savedInstanceState: Bundle?) : K
 
         if (oldSelectedBackgroundColor != selectedBackgroundColor) {
             // Recreate list of folders with updated account color
-            setUserFolders(foldersViewModel.getFolderListLiveData().value)
+            setUserFolders(latestFolderList)
         }
     }
 
@@ -238,7 +304,7 @@ class K9Drawer(private val parent: MessageList, savedInstanceState: Bundle?) : K
     fun updateUserAccountsAndFolders(account: Account?) {
         if (account != null) {
             initializeWithAccountColor(account)
-            headerView.setActiveProfile((account.accountNumber + 1 shl DRAWER_ACCOUNT_SHIFT).toLong())
+            headerView.setActiveProfile(account.drawerId)
             foldersViewModel.loadFolders(account)
         }
 
@@ -246,7 +312,10 @@ class K9Drawer(private val parent: MessageList, savedInstanceState: Bundle?) : K
         swipeRefreshLayout.setOnRefreshListener {
             val accountToRefresh = if (headerView.selectionListShown) null else account
             messagingController.checkMail(
-                accountToRefresh, true, true,
+                accountToRefresh,
+                true,
+                true,
+                true,
                 object : SimpleMessagingListener() {
                     override fun checkMailFinished(context: Context?, account: Account?) {
                         swipeRefreshLayout.post {
@@ -282,12 +351,17 @@ class K9Drawer(private val parent: MessageList, savedInstanceState: Bundle?) : K
         }
     }
 
-    private fun setUserFolders(folders: List<DisplayFolder>?) {
+    private fun setUserFolders(folderList: FolderList?) {
+        this.latestFolderList = folderList
         clearUserFolders()
 
         var openedFolderDrawerId: Long = -1
 
-        if (K9.isShowUnifiedInbox) {
+        if (folderList == null) {
+            return
+        }
+
+        folderList.unifiedInbox?.let { unifiedInbox ->
             val unifiedInboxItem = PrimaryDrawerItem().apply {
                 iconRes = R.drawable.ic_inbox_multiple
                 identifier = DRAWER_ID_UNIFIED_INBOX
@@ -295,6 +369,10 @@ class K9Drawer(private val parent: MessageList, savedInstanceState: Bundle?) : K
                 selectedColorInt = selectedBackgroundColor
                 textColor = selectedTextColor
                 isSelected = unifiedInboxSelected
+                buildBadgeText(unifiedInbox)?.let { text ->
+                    badgeText = text
+                    badgeStyle = folderBadgeStyle
+                }
             }
 
             sliderView.addItems(unifiedInboxItem)
@@ -305,21 +383,18 @@ class K9Drawer(private val parent: MessageList, savedInstanceState: Bundle?) : K
             }
         }
 
-        if (folders == null) {
-            return
-        }
-
-        for (displayFolder in folders) {
+        val accountOffset = folderList.accountId.toLong() shl DRAWER_ACCOUNT_SHIFT
+        for (displayFolder in folderList.folders) {
             val folder = displayFolder.folder
-            val drawerId = folder.id shl DRAWER_FOLDER_SHIFT
+            val drawerId = accountOffset + folder.id
 
-            val drawerItem = PrimaryDrawerItem().apply {
+            val drawerItem = FolderDrawerItem().apply {
                 iconRes = folderIconProvider.getFolderIcon(folder.type)
                 identifier = drawerId
                 tag = folder
                 nameText = getFolderDisplayName(folder)
-                displayFolder.unreadCount.takeIf { it > 0 }?.let {
-                    badgeText = it.toString()
+                buildBadgeText(displayFolder)?.let { text ->
+                    badgeText = text
                     badgeStyle = folderBadgeStyle
                 }
                 selectedColorInt = selectedBackgroundColor
@@ -395,8 +470,8 @@ class K9Drawer(private val parent: MessageList, savedInstanceState: Bundle?) : K
     }
 
     private fun getDarkThemeAccentColor(color: Int): Int {
-        val lightColors = resources.getIntArray(R.array.account_colors)
-        val darkColors = resources.getIntArray(R.array.drawer_account_accent_color_dark_theme)
+        val lightColors = resources.getIntArray(CoreR.array.account_colors)
+        val darkColors = resources.getIntArray(CoreR.array.drawer_account_accent_color_dark_theme)
         val index = lightColors.indexOf(color)
         return if (index == -1) color else darkColors[index]
     }
@@ -442,10 +517,12 @@ class K9Drawer(private val parent: MessageList, savedInstanceState: Bundle?) : K
     private val IProfile.accountUuid: String?
         get() = (this.tag as? Account)?.uuid
 
+    private val Account.drawerId: Long
+        get() = (accountNumber + 1).toLong()
+
     companion object {
-        // Bit shift for identifiers of user folders items, to leave space for other items
-        private const val DRAWER_FOLDER_SHIFT: Int = 20
-        private const val DRAWER_ACCOUNT_SHIFT: Int = 3
+        // Use the lower 48 bits for the folder ID, the upper bits for the account's drawer ID
+        private const val DRAWER_ACCOUNT_SHIFT: Int = 48
 
         private const val DRAWER_ID_UNIFIED_INBOX: Long = 0
         private const val DRAWER_ID_DIVIDER: Long = 1
@@ -464,14 +541,20 @@ class K9Drawer(private val parent: MessageList, savedInstanceState: Bundle?) : K
 private fun Context.obtainDrawerTextColor(): Int {
     val styledAttributes = obtainStyledAttributes(
         null,
-        R.styleable.MaterialDrawerSliderView,
-        R.attr.materialDrawerStyle,
-        R.style.Widget_MaterialDrawerStyle
+        MaterialDrawerR.styleable.MaterialDrawerSliderView,
+        MaterialDrawerR.attr.materialDrawerStyle,
+        MaterialDrawerR.style.Widget_MaterialDrawerStyle
     )
-    val textColor = styledAttributes.getColor(R.styleable.MaterialDrawerSliderView_materialDrawerPrimaryText, 0)
+    val textColor = styledAttributes.getColor(MaterialDrawerR.styleable.MaterialDrawerSliderView_materialDrawerPrimaryText, 0)
     styledAttributes.recycle()
 
     return textColor
 }
 
 private class FixedDividerDrawerItem(override var identifier: Long) : DividerDrawerItem()
+
+// We ellipsize long folder names in the middle for better readability
+private class FolderDrawerItem : PrimaryDrawerItem() {
+    override val type: Int = R.id.drawer_list_folder_item
+    override val layoutRes: Int = R.layout.drawer_folder_list_item
+}

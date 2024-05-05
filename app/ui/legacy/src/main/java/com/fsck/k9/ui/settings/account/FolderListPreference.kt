@@ -25,7 +25,8 @@ constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = TypedArrayUtils.getAttr(
-        context, androidx.preference.R.attr.dialogPreferenceStyle,
+        context,
+        androidx.preference.R.attr.dialogPreferenceStyle,
         android.R.attr.dialogPreferenceStyle
     ),
     defStyleRes: Int = 0
@@ -65,7 +66,7 @@ constructor(
         isEnabled = true
     }
 
-    override fun getSummary(): CharSequence {
+    override fun getSummary(): CharSequence? {
         // While folders are being loaded the summary returned by ListPreference will be empty. This leads to the
         // summary view being hidden. Once folders are loaded the summary updates and the list height changes. This
         // adds quite a bit of visual clutter. We avoid that by returning a placeholder summary value.

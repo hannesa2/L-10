@@ -14,10 +14,16 @@ internal object StorageMigrations {
         if (oldVersion < 6) StorageMigrationTo6(db, migrationsHelper).performLegacyMigrations()
         if (oldVersion < 7) StorageMigrationTo7(db, migrationsHelper).rewriteEnumOrdinalsToNames()
         if (oldVersion < 8) StorageMigrationTo8(db, migrationsHelper).rewriteTheme()
-        if (oldVersion < 9) StorageMigrationTo9(db, migrationsHelper).disablePush()
+        // 9: "Temporarily disable Push" is no longer necessary
         if (oldVersion < 10) StorageMigrationTo10(db, migrationsHelper).removeSavedFolderSettings()
         if (oldVersion < 11) StorageMigrationTo11(db, migrationsHelper).upgradeMessageViewContentFontSize()
         if (oldVersion < 12) StorageMigrationTo12(db, migrationsHelper).removeStoreAndTransportUri()
         if (oldVersion < 13) StorageMigrationTo13(db, migrationsHelper).renameHideSpecialAccounts()
+        if (oldVersion < 14) StorageMigrationTo14(db, migrationsHelper).disablePushFoldersForNonImapAccounts()
+        if (oldVersion < 15) StorageMigrationTo15(db, migrationsHelper).rewriteIdleRefreshInterval()
+        if (oldVersion < 16) StorageMigrationTo16(db, migrationsHelper).changeDefaultRegisteredNameColor()
+        if (oldVersion < 17) StorageMigrationTo17(db, migrationsHelper).rewriteNotificationLightSettings()
+        if (oldVersion < 18) StorageMigrationTo18(db, migrationsHelper).rewriteImapCompressionSettings()
+        if (oldVersion < 19) StorageMigrationTo19(db, migrationsHelper).markGmailAccounts()
     }
 }

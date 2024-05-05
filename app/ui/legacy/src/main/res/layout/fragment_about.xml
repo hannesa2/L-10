@@ -3,7 +3,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    tools:context=".settings.AboutFragment">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -21,12 +22,12 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingLeft="16dp"
+            android:paddingHorizontal="16dp"
             android:paddingTop="16dp"
-            android:paddingBottom="16dp"
+            android:paddingBottom="8dp"
             android:text="@string/about_title"
-            android:textAppearance="?android:attr/textAppearanceLarge"
-            android:textColor="?android:attr/textColorPrimary" />
+            android:textAppearance="@style/TextAppearance.AppCompat.Body2"
+            android:textColor="?attr/colorAccent" />
 
         <LinearLayout
             android:id="@+id/versionLayout"
@@ -52,7 +53,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingLeft="30dp">
+                android:paddingStart="30dp"
+                android:paddingEnd="0dp">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -92,7 +94,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingLeft="30dp">
+                android:paddingStart="30dp"
+                android:paddingEnd="0dp">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -131,7 +134,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingLeft="30dp">
+                android:paddingStart="30dp"
+                android:paddingEnd="0dp">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -170,7 +174,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingLeft="30dp">
+                android:paddingStart="30dp"
+                android:paddingEnd="0dp">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -188,12 +193,12 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingLeft="16dp"
-            android:paddingTop="32dp"
-            android:paddingBottom="16dp"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="16dp"
+            android:paddingBottom="8dp"
             android:text="@string/about_project_title"
-            android:textAppearance="?android:attr/textAppearanceLarge"
-            android:textColor="?android:attr/textColorPrimary" />
+            android:textAppearance="@style/TextAppearance.AppCompat.Body2"
+            android:textColor="?attr/colorAccent" />
 
         <LinearLayout
             android:id="@+id/websiteLayout"
@@ -219,7 +224,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingLeft="30dp">
+                android:paddingStart="30dp"
+                android:paddingEnd="0dp">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -258,7 +264,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingLeft="30dp">
+                android:paddingStart="30dp"
+                android:paddingEnd="0dp">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -297,7 +304,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingLeft="30dp">
+                android:paddingStart="30dp"
+                android:paddingEnd="0dp">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -336,7 +344,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingLeft="30dp">
+                android:paddingStart="30dp"
+                android:paddingEnd="0dp">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -355,12 +364,12 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
-            android:paddingLeft="16dp"
-            android:paddingTop="32dp"
-            android:paddingBottom="16dp"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="16dp"
+            android:paddingBottom="8dp"
             android:text="@string/about_libraries"
-            android:textAppearance="?android:attr/textAppearanceLarge"
-            android:textColor="?android:attr/textColorPrimary" />
+            android:textAppearance="@style/TextAppearance.AppCompat.Body2"
+            android:textColor="?attr/colorAccent" />
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/libraries"

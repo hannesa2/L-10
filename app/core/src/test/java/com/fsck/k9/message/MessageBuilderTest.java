@@ -9,7 +9,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.fsck.k9.Account.QuoteStyle;
 import com.fsck.k9.CoreResourceProvider;
@@ -23,6 +25,7 @@ import com.fsck.k9.mail.Message;
 import com.fsck.k9.mail.Message.RecipientType;
 import com.fsck.k9.mail.MessagingException;
 import com.fsck.k9.mail.internet.MessageIdGenerator;
+import com.fsck.k9.mail.internet.MimeHeader;
 import com.fsck.k9.mail.internet.MimeMessage;
 import com.fsck.k9.mail.internet.MimeMultipart;
 import com.fsck.k9.message.MessageBuilder.Callback;
@@ -35,8 +38,8 @@ import org.robolectric.annotation.LooperMode;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -49,6 +52,10 @@ public class MessageBuilderTest extends RobolectricTest {
     private static final String TEST_ATTACHMENT_TEXT = "text data in attachment";
     private static final String TEST_SUBJECT = "test_subject";
     private static final Address TEST_IDENTITY_ADDRESS = new Address("test@example.org", "tester");
+    private static final Address[] TEST_REPLY_TO = new Address[] {
+            new Address("reply-to1@example.org", "reply 1"),
+            new Address("reply-to2@example.org", "reply 2")
+    };
     private static final Address[] TEST_TO = new Address[] {
             new Address("to1@example.org", "recip 1"),
             new Address("to2@example.org", "recip 2")
@@ -72,6 +79,7 @@ public class MessageBuilderTest extends RobolectricTest {
             "BCC: bcc recip <bcc@example.org>\r\n" +
             "Subject: test_subject\r\n" +
             "User-Agent: K-9 Mail for Android\r\n" +
+            "Reply-to: reply 1 <reply-to1@example.org>, reply 2 <reply-to2@example.org>\r\n" +
             "In-Reply-To: inreplyto\r\n" +
             "References: references\r\n" +
             "Message-ID: " + TEST_MESSAGE_ID + "\r\n" +
@@ -211,6 +219,7 @@ public class MessageBuilderTest extends RobolectricTest {
         assertEquals("text/plain", message.getMimeType());
         assertEquals(TEST_SUBJECT, message.getSubject());
         assertEquals(TEST_IDENTITY_ADDRESS, message.getFrom()[0]);
+        assertArrayEquals(TEST_REPLY_TO, message.getReplyTo());
         assertArrayEquals(TEST_TO, message.getRecipients(RecipientType.TO));
         assertArrayEquals(TEST_CC, message.getRecipients(RecipientType.CC));
         assertArrayEquals(TEST_BCC, message.getRecipients(RecipientType.BCC));
@@ -273,6 +282,33 @@ public class MessageBuilderTest extends RobolectricTest {
         //RFC 2046 - 5.1.4. - Best type is last displayable
         assertEquals("text/plain", parts.get(0).getMimeType());
         assertEquals("text/html", parts.get(1).getMimeType());
+    }
+
+    @Test
+    public void build_usingHtmlFormatWithInlineAttachment_shouldUseMultipartAlternativeInCorrectOrder() throws Exception {
+        String contentId = "contentId";
+        String attachmentMimeType = "image/png";
+
+        Map<String, Attachment> inlineAttachments = new HashMap<>();
+        inlineAttachments.put(contentId, createAttachmentWithContent(attachmentMimeType, "1x1.png",
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVQI12P4//8/AAX+Av7czFnnAAAAAElFTkSuQmCC"));
+        MessageBuilder messageBuilder = createHtmlMessageBuilder().setInlineAttachments(inlineAttachments);
+
+        messageBuilder.buildAsync(callback);
+
+        MimeMessage message = getMessageFromCallback();
+        assertEquals(MimeMultipart.class, message.getBody().getClass());
+        assertEquals("multipart/alternative", ((MimeMultipart) message.getBody()).getMimeType());
+        List<BodyPart> parts =  ((MimeMultipart) message.getBody()).getBodyParts();
+        //RFC 2046 - 5.1.4. - Best type is last displayable
+        assertEquals("text/plain", parts.get(0).getMimeType());
+        assertEquals("multipart/related", parts.get(1).getMimeType());
+        List<BodyPart> partWithInlineAttachment =  ((MimeMultipart) parts.get(1).getBody()).getBodyParts();
+        assertEquals("text/html", partWithInlineAttachment.get(0).getMimeType());
+        assertEquals(attachmentMimeType, partWithInlineAttachment.get(1).getMimeType());
+        String[] attachmentHeaders = partWithInlineAttachment.get(1).getHeader(MimeHeader.HEADER_CONTENT_ID);
+        assertEquals(1, attachmentHeaders.length);
+        assertEquals(contentId, attachmentHeaders[0]);
     }
 
     @Test
@@ -388,6 +424,11 @@ public class MessageBuilderTest extends RobolectricTest {
             public LoadingState getState() {
                 return LoadingState.COMPLETE;
             }
+
+            @Override
+            public boolean isInternalAttachment() {
+                return true;
+            }
         };
     }
 
@@ -397,6 +438,7 @@ public class MessageBuilderTest extends RobolectricTest {
                 .setSubject(TEST_SUBJECT)
                 .setSentDate(SENT_DATE)
                 .setHideTimeZone(true)
+                .setReplyTo(TEST_REPLY_TO)
                 .setTo(Arrays.asList(TEST_TO))
                 .setCc(Arrays.asList(TEST_CC))
                 .setBcc(Arrays.asList(TEST_BCC))

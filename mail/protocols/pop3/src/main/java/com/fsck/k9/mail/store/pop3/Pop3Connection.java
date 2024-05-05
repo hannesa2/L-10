@@ -5,9 +5,10 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.net.SocketAddress;
+import java.net.UnknownHostException;
 import java.security.GeneralSecurityException;
 import java.security.KeyManagementException;
 import java.security.MessageDigest;
@@ -17,6 +18,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
+import com.fsck.k9.logging.Timber;
 import com.fsck.k9.mail.AuthType;
 import com.fsck.k9.mail.Authentication;
 import com.fsck.k9.mail.AuthenticationFailedException;
@@ -28,7 +30,6 @@ import com.fsck.k9.mail.filter.Base64;
 import com.fsck.k9.mail.filter.Hex;
 import com.fsck.k9.mail.ssl.TrustedSocketFactory;
 import javax.net.ssl.SSLException;
-import timber.log.Timber;
 
 import static com.fsck.k9.mail.CertificateValidationException.Reason.MissingCapability;
 import static com.fsck.k9.mail.K9MailLib.DEBUG_PROTOCOL_POP3;
@@ -61,15 +62,7 @@ class Pop3Connection {
 
     void open() throws MessagingException {
         try {
-            SocketAddress socketAddress = new InetSocketAddress(settings.getHost(), settings.getPort());
-            if (settings.getConnectionSecurity() == ConnectionSecurity.SSL_TLS_REQUIRED) {
-                socket = trustedSocketFactory.createSocket(null, settings.getHost(),
-                        settings.getPort(), settings.getClientCertificateAlias());
-            } else {
-                socket = new Socket();
-            }
-
-            socket.connect(socketAddress, SOCKET_CONNECT_TIMEOUT);
+            socket = connect();
             in = new BufferedInputStream(socket.getInputStream(), 1024);
             out = new BufferedOutputStream(socket.getOutputStream(), 512);
 
@@ -100,6 +93,44 @@ class Pop3Connection {
         } catch (IOException ioe) {
             throw new MessagingException("Unable to open connection to POP server.", ioe);
         }
+    }
+
+    private Socket connect()
+            throws IOException, MessagingException, NoSuchAlgorithmException, KeyManagementException {
+        InetAddress[] inetAddresses = InetAddress.getAllByName(settings.getHost());
+
+        IOException connectException = null;
+        for (InetAddress address : inetAddresses) {
+            try {
+                return connectToAddress(address);
+            } catch (IOException e) {
+                Timber.w(e, "Could not connect to %s", address);
+                connectException = e;
+            }
+        }
+
+        throw connectException != null ? connectException : new UnknownHostException();
+    }
+
+    private Socket connectToAddress(InetAddress address)
+            throws IOException, MessagingException, NoSuchAlgorithmException, KeyManagementException {
+        if (K9MailLib.isDebug() && K9MailLib.DEBUG_PROTOCOL_POP3) {
+            Timber.d("Connecting to %s as %s", settings.getHost(), address);
+        }
+
+        InetSocketAddress socketAddress = new InetSocketAddress(address, settings.getPort());
+
+        final Socket socket;
+        if (settings.getConnectionSecurity() == ConnectionSecurity.SSL_TLS_REQUIRED) {
+            socket = trustedSocketFactory.createSocket(null, settings.getHost(), settings.getPort(),
+                    settings.getClientCertificateAlias());
+        } else {
+            socket = new Socket();
+        }
+
+        socket.connect(socketAddress, SOCKET_CONNECT_TIMEOUT);
+
+        return socket;
     }
 
     /*
@@ -176,40 +207,6 @@ class Pop3Connection {
     private Pop3Capabilities getCapabilities() throws IOException {
         Pop3Capabilities capabilities = new Pop3Capabilities();
         try {
-            /*
-             * Try sending an AUTH command with no arguments.
-             *
-             * The server may respond with a list of supported SASL
-             * authentication mechanisms.
-             *
-             * Ref.: http://tools.ietf.org/html/draft-myers-sasl-pop3-05
-             *
-             * While this never became a standard, there are servers that
-             * support it, and Thunderbird includes this check.
-             */
-            executeSimpleCommand(AUTH_COMMAND);
-            String response;
-            while ((response = readLine()) != null) {
-                if (response.equals(".")) {
-                    break;
-                }
-                response = response.toUpperCase(Locale.US);
-                switch (response) {
-                    case AUTH_PLAIN_CAPABILITY:
-                        capabilities.authPlain = true;
-                        break;
-                    case AUTH_CRAM_MD5_CAPABILITY:
-                        capabilities.cramMD5 = true;
-                        break;
-                    case AUTH_EXTERNAL_CAPABILITY:
-                        capabilities.external = true;
-                        break;
-                }
-            }
-        } catch (MessagingException ignored) {
-            // Assume AUTH command with no arguments is not supported.
-        }
-        try {
             executeSimpleCommand(CAPA_COMMAND);
             String response;
             while ((response = readLine()) != null) {
@@ -230,6 +227,9 @@ class Pop3Connection {
                     }
                     if (saslAuthMechanisms.contains(AUTH_CRAM_MD5_CAPABILITY)) {
                         capabilities.cramMD5 = true;
+                    }
+                    if (saslAuthMechanisms.contains(AUTH_EXTERNAL_CAPABILITY)) {
+                        capabilities.external = true;
                     }
                 }
             }

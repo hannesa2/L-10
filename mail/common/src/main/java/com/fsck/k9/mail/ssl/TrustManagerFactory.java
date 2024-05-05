@@ -10,12 +10,12 @@ import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.fsck.k9.logging.Timber;
 import com.fsck.k9.mail.CertificateChainException;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
-import org.apache.http.conn.ssl.StrictHostnameVerifier;
-import timber.log.Timber;
+import org.apache.hc.client5.http.ssl.DefaultHostnameVerifier;
 
 public class TrustManagerFactory {
     public static TrustManagerFactory createInstance(LocalKeyStore localKeyStore) {
@@ -68,6 +68,8 @@ public class TrustManagerFactory {
     }
 
     private class SecureX509TrustManager implements X509TrustManager {
+        private final DefaultHostnameVerifier hostnameVerifier = new DefaultHostnameVerifier();
+
         private final String mHost;
         private final int mPort;
 
@@ -90,7 +92,7 @@ public class TrustManagerFactory {
 
             try {
                 defaultTrustManager.checkServerTrusted(chain, authType);
-                new StrictHostnameVerifier().verify(mHost, certificate);
+                hostnameVerifier.verify(mHost, certificate);
                 return;
             } catch (CertificateException e) {
                 // cert. chain can't be validated

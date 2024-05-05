@@ -5,19 +5,20 @@ import android.net.Uri
 import com.fsck.k9.autodiscovery.api.ConnectionSettingsDiscovery
 import com.fsck.k9.autodiscovery.api.DiscoveredServerSettings
 import com.fsck.k9.autodiscovery.api.DiscoveryResults
-import com.fsck.k9.autodiscovery.api.DiscoveryTarget
 import com.fsck.k9.helper.EmailHelper
 import com.fsck.k9.mail.AuthType
 import com.fsck.k9.mail.ConnectionSecurity
+import com.fsck.k9.oauth.OAuthConfigurationProvider
 import com.fsck.k9.preferences.Protocols
 import org.xmlpull.v1.XmlPullParser
 import timber.log.Timber
 
 class ProvidersXmlDiscovery(
-    private val xmlProvider: ProvidersXmlProvider
+    private val xmlProvider: ProvidersXmlProvider,
+    private val oAuthConfigurationProvider: OAuthConfigurationProvider
 ) : ConnectionSettingsDiscovery {
 
-    override fun discover(email: String, target: DiscoveryTarget): DiscoveryResults? {
+    override fun discover(email: String): DiscoveryResults? {
         val domain = EmailHelper.getDomainFromEmailAddress(email) ?: return null
 
         val provider = findProviderForDomain(domain) ?: return null
@@ -104,7 +105,13 @@ class ProvidersXmlDiscovery(
             uri.port
         }
 
-        return DiscoveredServerSettings(Protocols.IMAP, host, port, security, AuthType.PLAIN, username)
+        val authType = if (oAuthConfigurationProvider.getConfiguration(host) != null) {
+            AuthType.XOAUTH2
+        } else {
+            AuthType.PLAIN
+        }
+
+        return DiscoveredServerSettings(Protocols.IMAP, host, port, security, authType, username)
     }
 
     private fun Provider.toOutgoingServerSettings(email: String): DiscoveredServerSettings? {
@@ -127,7 +134,13 @@ class ProvidersXmlDiscovery(
             uri.port
         }
 
-        return DiscoveredServerSettings(Protocols.SMTP, host, port, security, AuthType.PLAIN, username)
+        val authType = if (oAuthConfigurationProvider.getConfiguration(host) != null) {
+            AuthType.XOAUTH2
+        } else {
+            AuthType.PLAIN
+        }
+
+        return DiscoveredServerSettings(Protocols.SMTP, host, port, security, authType, username)
     }
 
     private fun String.fillInUsernameTemplate(email: String, user: String, domain: String): String {

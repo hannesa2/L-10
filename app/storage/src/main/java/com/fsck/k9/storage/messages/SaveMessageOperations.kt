@@ -9,6 +9,7 @@ import com.fsck.k9.mail.BoundaryGenerator
 import com.fsck.k9.mail.Flag
 import com.fsck.k9.mail.Message
 import com.fsck.k9.mail.Message.RecipientType
+import com.fsck.k9.mail.MessageDownloadState
 import com.fsck.k9.mail.Multipart
 import com.fsck.k9.mail.Part
 import com.fsck.k9.mail.filter.CountingOutputStream
@@ -27,7 +28,6 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
-import java.util.Locale
 import java.util.Stack
 import java.util.UUID
 import org.apache.commons.io.IOUtils
@@ -305,9 +305,10 @@ internal class SaveMessageOperations(
     private fun decodeAndCountBytes(rawInputStream: InputStream, encoding: String, fallbackValue: Long): Long {
         return try {
             getDecodingInputStream(rawInputStream, encoding).use { decodingInputStream ->
-                val countingOutputStream = CountingOutputStream()
-                IOUtils.copy(decodingInputStream, countingOutputStream)
-                countingOutputStream.count
+                CountingOutputStream().use { countingOutputStream ->
+                    IOUtils.copy(decodingInputStream, countingOutputStream)
+                    countingOutputStream.count
+                }
             }
         } catch (e: IOException) {
             fallbackValue
@@ -354,7 +355,7 @@ internal class SaveMessageOperations(
 
     private fun getTransferEncoding(part: Part): String {
         val contentTransferEncoding = part.getHeader(MimeHeader.HEADER_CONTENT_TRANSFER_ENCODING).firstOrNull()
-        return contentTransferEncoding?.toLowerCase(Locale.ROOT) ?: MimeUtil.ENC_7BIT
+        return contentTransferEncoding?.lowercase() ?: MimeUtil.ENC_7BIT
     }
 
     private fun addChildrenToStack(stack: Stack<PartContainer>, part: Part, parentId: Long) {
@@ -381,10 +382,10 @@ internal class SaveMessageOperations(
     ): Long {
         val message = messageData.message
 
-        if (messageData.partialMessage) {
-            message.setFlag(Flag.X_DOWNLOADED_PARTIAL, true)
-        } else {
-            message.setFlag(Flag.X_DOWNLOADED_FULL, true)
+        when (messageData.downloadState) {
+            MessageDownloadState.ENVELOPE -> Unit
+            MessageDownloadState.PARTIAL -> message.setFlag(Flag.X_DOWNLOADED_PARTIAL, true)
+            MessageDownloadState.FULL -> message.setFlag(Flag.X_DOWNLOADED_FULL, true)
         }
 
         val values = ContentValues().apply {

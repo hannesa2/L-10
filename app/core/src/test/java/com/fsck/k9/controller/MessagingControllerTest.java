@@ -14,11 +14,13 @@ import com.fsck.k9.K9RobolectricTest;
 import com.fsck.k9.Preferences;
 import com.fsck.k9.backend.BackendManager;
 import com.fsck.k9.backend.api.Backend;
+import com.fsck.k9.mail.AuthType;
 import com.fsck.k9.mail.AuthenticationFailedException;
 import com.fsck.k9.mail.CertificateValidationException;
+import com.fsck.k9.mail.ConnectionSecurity;
 import com.fsck.k9.mail.Flag;
-import com.fsck.k9.mail.MessageRetrievalListener;
 import com.fsck.k9.mail.MessagingException;
+import com.fsck.k9.mail.ServerSettings;
 import com.fsck.k9.mailstore.LocalFolder;
 import com.fsck.k9.mailstore.LocalMessage;
 import com.fsck.k9.mailstore.LocalStore;
@@ -28,18 +30,14 @@ import com.fsck.k9.mailstore.OutboxState;
 import com.fsck.k9.mailstore.OutboxStateRepository;
 import com.fsck.k9.mailstore.SaveMessageDataCreator;
 import com.fsck.k9.mailstore.SendState;
-import com.fsck.k9.mailstore.UnavailableStorageException;
+import com.fsck.k9.mailstore.SpecialLocalFoldersCreator;
 import com.fsck.k9.notification.NotificationController;
 import com.fsck.k9.notification.NotificationStrategy;
-import com.fsck.k9.search.LocalSearch;
-import com.fsck.k9.search.SearchAccount;
-import org.jetbrains.annotations.NotNull;
+import com.fsck.k9.preferences.Protocols;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
-import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -50,14 +48,14 @@ import org.robolectric.shadows.ShadowLog;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.nullable;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 
@@ -81,9 +79,9 @@ public class MessagingControllerTest extends K9RobolectricTest {
     @Mock
     private SaveMessageDataCreator saveMessageDataCreator;
     @Mock
-    private SimpleMessagingListener listener;
+    private SpecialLocalFoldersCreator specialLocalFoldersCreator;
     @Mock
-    private LocalSearch search;
+    private SimpleMessagingListener listener;
     @Mock
     private LocalFolder localFolder;
     @Mock
@@ -94,8 +92,6 @@ public class MessagingControllerTest extends K9RobolectricTest {
     private NotificationController notificationController;
     @Mock
     private NotificationStrategy notificationStrategy;
-    @Captor
-    private ArgumentCaptor<MessageRetrievalListener<LocalMessage>> messageRetrievalListenerCaptor;
 
     private Context appContext;
     private Set<Flag> reqFlags;
@@ -110,18 +106,6 @@ public class MessagingControllerTest extends K9RobolectricTest {
     private LocalMessage localMessageToSend1;
     private volatile boolean hasFetchedMessage = false;
 
-    private UnreadMessageCountProvider unreadMessageCountProvider = new UnreadMessageCountProvider() {
-        @Override
-        public int getUnreadMessageCount(@NotNull SearchAccount searchAccount) {
-            return 0;
-        }
-
-        @Override
-        public int getUnreadMessageCount(@NotNull Account account) {
-            return 0;
-        }
-    };
-
     private Preferences preferences;
     private String accountUuid;
 
@@ -130,13 +114,13 @@ public class MessagingControllerTest extends K9RobolectricTest {
     public void setUp() throws MessagingException {
         ShadowLog.stream = System.out;
         MockitoAnnotations.initMocks(this);
-        appContext = RuntimeEnvironment.application;
+        appContext = RuntimeEnvironment.getApplication();
 
-        preferences = Preferences.getPreferences(appContext);
+        preferences = Preferences.getPreferences();
 
         controller = new MessagingController(appContext, notificationController, notificationStrategy,
-                localStoreProvider, unreadMessageCountProvider, backendManager, preferences, messageStoreManager,
-                saveMessageDataCreator, Collections.<ControllerExtension>emptyList());
+                localStoreProvider, backendManager, preferences, messageStoreManager,
+                saveMessageDataCreator, specialLocalFoldersCreator, Collections.<ControllerExtension>emptyList());
 
         configureAccount();
         configureBackendManager();
@@ -164,47 +148,11 @@ public class MessagingControllerTest extends K9RobolectricTest {
         verify(localFolder).clearAllMessages();
     }
 
-    @Test(expected = UnavailableAccountException.class)
-    public void clearFolderSynchronous_whenStorageUnavailable_shouldThrowUnavailableAccountException() throws MessagingException {
-        doThrow(new UnavailableStorageException("Test")).when(localFolder).open();
-
-        controller.clearFolderSynchronous(account, FOLDER_ID);
-    }
-
     @Test
     public void refreshRemoteSynchronous_shouldCallBackend() throws MessagingException {
         controller.refreshFolderListSynchronous(account);
 
         verify(backend).refreshFolderList();
-    }
-
-    @Test
-    public void searchLocalMessagesSynchronous_shouldCallSearchForMessagesOnLocalStore()
-            throws Exception {
-        when(search.searchAllAccounts()).thenReturn(true);
-        when(search.getAccountUuids()).thenReturn(new String[0]);
-
-        controller.searchLocalMessagesSynchronous(search, listener);
-
-        verify(localStore).searchForMessages(nullable(MessageRetrievalListener.class), eq(search));
-    }
-
-    @Test
-    public void searchLocalMessagesSynchronous_shouldNotifyWhenStoreFinishesRetrievingAMessage()
-            throws Exception {
-        LocalMessage localMessage = mock(LocalMessage.class);
-        when(localMessage.getFolder()).thenReturn(localFolder);
-        when(search.searchAllAccounts()).thenReturn(true);
-        when(search.getAccountUuids()).thenReturn(new String[0]);
-        when(localStore.searchForMessages(nullable(MessageRetrievalListener.class), eq(search)))
-                .thenThrow(new MessagingException("Test"));
-
-        controller.searchLocalMessagesSynchronous(search, listener);
-
-        verify(localStore).searchForMessages(messageRetrievalListenerCaptor.capture(), eq(search));
-        messageRetrievalListenerCaptor.getValue().messageFinished(localMessage, 1, 1);
-        verify(listener).listLocalMessagesAddMessages(eq(account),
-                eq((String) null), eq(Collections.singletonList(localMessage)));
     }
 
     private void setupRemoteSearch() throws Exception {
@@ -334,7 +282,7 @@ public class MessagingControllerTest extends K9RobolectricTest {
 
         controller.sendPendingMessagesSynchronous(account);
 
-        verifyZeroInteractions(listener);
+        verifyNoMoreInteractions(listener);
     }
 
     @Test
@@ -420,7 +368,7 @@ public class MessagingControllerTest extends K9RobolectricTest {
         when(localStore.getFolder(SENT_FOLDER_ID)).thenReturn(sentFolder);
         when(sentFolder.getDatabaseId()).thenReturn(SENT_FOLDER_ID);
         when(localFolder.exists()).thenReturn(true);
-        when(localFolder.getMessages(null)).thenReturn(Collections.singletonList(localMessageToSend1));
+        when(localFolder.getMessages()).thenReturn(Collections.singletonList(localMessageToSend1));
         when(localMessageToSend1.getUid()).thenReturn("localMessageToSend1");
         when(localMessageToSend1.getDatabaseId()).thenReturn(42L);
         when(localMessageToSend1.getHeader(K9.IDENTITY_HEADER)).thenReturn(new String[]{});
@@ -441,6 +389,10 @@ public class MessagingControllerTest extends K9RobolectricTest {
         account = preferences.newAccount();
         accountUuid = account.getUuid();
 
+        account.setIncomingServerSettings(new ServerSettings(Protocols.IMAP, "host", 993,
+                ConnectionSecurity.SSL_TLS_REQUIRED, AuthType.PLAIN, "username", "password", null));
+        account.setOutgoingServerSettings(new ServerSettings(Protocols.SMTP, "host", 465,
+                ConnectionSecurity.SSL_TLS_REQUIRED, AuthType.PLAIN, "username", "password", null));
         account.setMaximumAutoDownloadMessageSize(MAXIMUM_SMALL_MESSAGE_SIZE);
         account.setEmail("user@host.com");
     }

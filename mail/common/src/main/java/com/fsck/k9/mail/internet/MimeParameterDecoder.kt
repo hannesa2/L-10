@@ -2,7 +2,6 @@ package com.fsck.k9.mail.internet
 
 import java.nio.charset.Charset
 import java.nio.charset.IllegalCharsetNameException
-import java.util.Locale
 import okio.Buffer
 
 private typealias Parameters = Map<String, String>
@@ -55,6 +54,26 @@ object MimeParameterDecoder {
         )
     }
 
+    fun decodeBasic(headerBody: String): MimeValue {
+        val parser = MimeHeaderParser(headerBody)
+
+        val value = parser.readHeaderValue()
+        parser.skipCFWS()
+        if (parser.endReached()) {
+            return MimeValue(value)
+        }
+
+        val (basicParameters, duplicateParameters, parserErrorIndex) = readBasicParameters(parser)
+        val parameters = basicParameters.mapValues { (_, parameterValue) -> parameterValue.value }
+
+        return MimeValue(
+            value = value,
+            parameters = parameters,
+            ignoredParameters = duplicateParameters,
+            parserErrorIndex = parserErrorIndex
+        )
+    }
+
     @JvmStatic
     fun extractHeaderValue(headerBody: String): String {
         val parser = MimeHeaderParser(headerBody)
@@ -69,7 +88,7 @@ object MimeParameterDecoder {
             do {
                 parser.expect(SEMICOLON)
 
-                val parameterName = parser.readToken().toLowerCase(Locale.ROOT)
+                val parameterName = parser.readToken().lowercase()
 
                 parser.skipCFWS()
                 parser.expect(EQUALS_SIGN)
@@ -199,7 +218,12 @@ object MimeParameterDecoder {
                 parser.readExtendedParameterValueInto(data)
 
                 InitialExtendedValueParameterSection(
-                    newParameterName, parameterName, section, charsetName, language, data
+                    newParameterName,
+                    parameterName,
+                    section,
+                    charsetName,
+                    language,
+                    data
                 )
             } else {
                 val encodedParameterText = parameterText.substring(parser.position())

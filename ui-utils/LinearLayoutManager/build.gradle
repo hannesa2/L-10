@@ -1,0 +1,11 @@
+plugins {
+    alias(libs.plugins.android.library)
+}
+
+dependencies {
+    api libs.androidx.recyclerview
+}
+
+android {
+    namespace 'app.k9mail.ui.utils.linearlayoutmanager'
+}

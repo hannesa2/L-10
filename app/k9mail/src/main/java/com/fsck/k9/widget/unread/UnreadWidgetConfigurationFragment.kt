@@ -18,6 +18,7 @@ import com.fsck.k9.search.SearchAccount
 import com.fsck.k9.ui.choosefolder.ChooseFolderActivity
 import com.takisoft.preferencex.PreferenceFragmentCompat
 import org.koin.android.ext.android.inject
+import com.fsck.k9.ui.R as UiR
 
 class UnreadWidgetConfigurationFragment : PreferenceFragmentCompat() {
     private val preferences: Preferences by inject()
@@ -48,7 +49,7 @@ class UnreadWidgetConfigurationFragment : PreferenceFragmentCompat() {
 
         unreadFolderEnabled = findPreference(PREFERENCE_UNREAD_FOLDER_ENABLED)!!
         unreadFolderEnabled.onPreferenceChangeListener = Preference.OnPreferenceChangeListener { _, _ ->
-            unreadFolder.summary = getString(R.string.unread_widget_folder_summary)
+            unreadFolder.summary = getString(UiR.string.unread_widget_folder_summary)
             selectedFolderId = null
             selectedFolderDisplayName = null
             true
@@ -58,6 +59,7 @@ class UnreadWidgetConfigurationFragment : PreferenceFragmentCompat() {
         unreadFolder.onPreferenceClickListener = Preference.OnPreferenceClickListener {
             val intent = ChooseFolderActivity.buildLaunchIntent(
                 context = requireContext(),
+                action = ChooseFolderActivity.Action.CHOOSE,
                 accountUuid = selectedAccountUuid!!,
                 showDisplayableOnly = true
             )
@@ -115,7 +117,7 @@ class UnreadWidgetConfigurationFragment : PreferenceFragmentCompat() {
         selectedAccountUuid = accountUuid
         selectedFolderId = null
         selectedFolderDisplayName = null
-        unreadFolder.summary = getString(R.string.unread_widget_folder_summary)
+        unreadFolder.summary = getString(UiR.string.unread_widget_folder_summary)
         if (SearchAccount.UNIFIED_INBOX == selectedAccountUuid) {
             handleSearchAccount()
         } else {
@@ -125,7 +127,7 @@ class UnreadWidgetConfigurationFragment : PreferenceFragmentCompat() {
 
     private fun handleSearchAccount() {
         if (SearchAccount.UNIFIED_INBOX == selectedAccountUuid) {
-            unreadAccount.setSummary(R.string.unread_widget_unified_inbox_account_summary)
+            unreadAccount.setSummary(UiR.string.unread_widget_unified_inbox_account_summary)
         }
         unreadFolderEnabled.isEnabled = false
         unreadFolderEnabled.isChecked = false
@@ -138,10 +140,7 @@ class UnreadWidgetConfigurationFragment : PreferenceFragmentCompat() {
         val selectedAccount = preferences.getAccount(selectedAccountUuid!!)
             ?: error("Account $selectedAccountUuid not found")
 
-        val accountDescription: String? = selectedAccount.description
-        val summary = if (accountDescription.isNullOrEmpty()) selectedAccount.email else accountDescription
-
-        unreadAccount.summary = summary
+        unreadAccount.summary = selectedAccount.displayName
         unreadFolderEnabled.isEnabled = true
         unreadFolder.isEnabled = true
     }
@@ -170,10 +169,10 @@ class UnreadWidgetConfigurationFragment : PreferenceFragmentCompat() {
 
     private fun validateWidget(): Boolean {
         if (selectedAccountUuid == null) {
-            Toast.makeText(requireContext(), R.string.unread_widget_account_not_selected, Toast.LENGTH_LONG).show()
+            Toast.makeText(requireContext(), UiR.string.unread_widget_account_not_selected, Toast.LENGTH_LONG).show()
             return false
         } else if (unreadFolderEnabled.isChecked && selectedFolderId == null) {
-            Toast.makeText(requireContext(), R.string.unread_widget_folder_not_selected, Toast.LENGTH_LONG).show()
+            Toast.makeText(requireContext(), UiR.string.unread_widget_folder_not_selected, Toast.LENGTH_LONG).show()
             return false
         }
         return true

@@ -31,6 +31,7 @@ public class ManageIdentities extends ChooseIdentity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setTitle(R.string.manage_identities_title);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
     }
 
@@ -138,7 +139,7 @@ public class ManageIdentities extends ChooseIdentity {
     private void saveIdentities() {
         if (mIdentitiesChanged) {
             mAccount.setIdentities(identities);
-            Preferences.getPreferences(getApplicationContext()).saveAccount(mAccount);
+            Preferences.getPreferences().saveAccount(mAccount);
         }
         finish();
     }

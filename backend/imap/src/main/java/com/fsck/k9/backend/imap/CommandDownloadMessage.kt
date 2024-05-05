@@ -6,17 +6,19 @@ import com.fsck.k9.mail.FetchProfile.Item.BODY
 import com.fsck.k9.mail.FetchProfile.Item.ENVELOPE
 import com.fsck.k9.mail.FetchProfile.Item.FLAGS
 import com.fsck.k9.mail.FetchProfile.Item.STRUCTURE
+import com.fsck.k9.mail.MessageDownloadState
 import com.fsck.k9.mail.helper.fetchProfileOf
 import com.fsck.k9.mail.store.imap.ImapFolder
 import com.fsck.k9.mail.store.imap.ImapMessage
 import com.fsck.k9.mail.store.imap.ImapStore
+import com.fsck.k9.mail.store.imap.OpenMode
 
 internal class CommandDownloadMessage(private val backendStorage: BackendStorage, private val imapStore: ImapStore) {
 
     fun downloadMessageStructure(folderServerId: String, messageServerId: String) {
         val folder = imapStore.getFolder(folderServerId)
         try {
-            folder.open(ImapFolder.OPEN_MODE_RO)
+            folder.open(OpenMode.READ_ONLY)
 
             val message = folder.getMessage(messageServerId)
 
@@ -25,7 +27,7 @@ internal class CommandDownloadMessage(private val backendStorage: BackendStorage
             fetchMessage(folder, message, fetchProfileOf(STRUCTURE))
 
             val backendFolder = backendStorage.getFolder(folderServerId)
-            backendFolder.savePartialMessage(message)
+            backendFolder.saveMessage(message, MessageDownloadState.ENVELOPE)
         } finally {
             folder.close()
         }
@@ -34,13 +36,13 @@ internal class CommandDownloadMessage(private val backendStorage: BackendStorage
     fun downloadCompleteMessage(folderServerId: String, messageServerId: String) {
         val folder = imapStore.getFolder(folderServerId)
         try {
-            folder.open(ImapFolder.OPEN_MODE_RO)
+            folder.open(OpenMode.READ_ONLY)
 
             val message = folder.getMessage(messageServerId)
             fetchMessage(folder, message, fetchProfileOf(FLAGS, BODY))
 
             val backendFolder = backendStorage.getFolder(folderServerId)
-            backendFolder.saveCompleteMessage(message)
+            backendFolder.saveMessage(message, MessageDownloadState.FULL)
         } finally {
             folder.close()
         }

@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import androidx.appcompat.widget.SearchView
-import androidx.lifecycle.Observer
 import androidx.recyclerview.widget.RecyclerView
 import com.fsck.k9.Account
 import com.fsck.k9.Account.FolderMode
@@ -20,7 +19,6 @@ import com.fsck.k9.ui.R
 import com.fsck.k9.ui.base.K9Activity
 import com.fsck.k9.ui.folders.FolderIconProvider
 import com.fsck.k9.ui.folders.FolderNameFormatter
-import com.fsck.k9.ui.folders.FoldersLiveData
 import com.mikepenz.fastadapter.FastAdapter
 import com.mikepenz.fastadapter.adapters.ItemAdapter
 import java.util.Locale
@@ -32,21 +30,17 @@ class ChooseFolderActivity : K9Activity() {
     private val viewModel: ChooseFolderViewModel by viewModel()
     private val preferences: Preferences by inject()
     private val messagingController: MessagingController by inject()
-    private val folderNameFormatter: FolderNameFormatter by inject { parametersOf(this) }
-    private val folderIconProvider by lazy { FolderIconProvider(theme) }
+    private val folderNameFormatter: FolderNameFormatter by inject()
+    private val folderIconProvider: FolderIconProvider by inject { parametersOf(theme) }
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var itemAdapter: ItemAdapter<FolderListItem>
     private lateinit var account: Account
+    private lateinit var action: Action
     private var currentFolderId: Long? = null
     private var scrollToFolderId: Long? = null
     private var messageReference: String? = null
     private var showDisplayableOnly = false
-    private var foldersLiveData: FoldersLiveData? = null
-
-    private val folderListObserver = Observer<List<DisplayFolder>> { folders ->
-        updateFolderList(folders)
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,17 +51,28 @@ class ChooseFolderActivity : K9Activity() {
             return
         }
 
+        when (action) {
+            Action.MOVE -> setTitle(R.string.choose_folder_move_title)
+            Action.COPY -> setTitle(R.string.choose_folder_copy_title)
+            else -> setTitle(R.string.choose_folder_title)
+        }
+
+        initializeActionBar()
         initializeFolderList()
+
+        viewModel.getFolders().observe(this) { folders ->
+            updateFolderList(folders)
+        }
 
         val savedDisplayMode = savedInstanceState?.getString(STATE_DISPLAY_MODE)?.let { FolderMode.valueOf(it) }
         val displayMode = savedDisplayMode ?: getInitialDisplayMode()
 
-        foldersLiveData = viewModel.getFolders(account, displayMode).apply {
-            observe(this@ChooseFolderActivity, folderListObserver)
-        }
+        viewModel.setDisplayMode(account, displayMode)
     }
 
     private fun decodeArguments(savedInstanceState: Bundle?): Boolean {
+        action = intent.action?.toAction() ?: error("Missing Intent action")
+
         val accountUuid = intent.getStringExtra(EXTRA_ACCOUNT) ?: return false
         account = preferences.getAccount(accountUuid) ?: return false
 
@@ -86,6 +91,12 @@ class ChooseFolderActivity : K9Activity() {
 
     private fun getInitialDisplayMode(): FolderMode {
         return if (showDisplayableOnly) account.folderDisplayMode else account.folderTargetMode
+    }
+
+    private fun initializeActionBar() {
+        val actionBar = supportActionBar ?: error("Action bar missing")
+        actionBar.setDisplayHomeAsUpEnabled(true)
+        actionBar.setHomeAsUpIndicator(R.drawable.ic_close)
     }
 
     private fun initializeFolderList() {
@@ -136,7 +147,7 @@ class ChooseFolderActivity : K9Activity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         scrollToFolderId?.let { folderId -> outState.putLong(STATE_SCROLL_TO_FOLDER_ID, folderId) }
-        outState.putString(STATE_DISPLAY_MODE, foldersLiveData?.displayMode?.name)
+        outState.putString(STATE_DISPLAY_MODE, viewModel.currentDisplayMode?.name)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -165,6 +176,7 @@ class ChooseFolderActivity : K9Activity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
+            android.R.id.home -> finish()
             R.id.display_1st_class -> setDisplayMode(FolderMode.FIRST_CLASS)
             R.id.display_1st_and_2nd_class -> setDisplayMode(FolderMode.FIRST_AND_SECOND_CLASS)
             R.id.display_not_second_class -> setDisplayMode(FolderMode.NOT_SECOND_CLASS)
@@ -180,10 +192,7 @@ class ChooseFolderActivity : K9Activity() {
     }
 
     private fun setDisplayMode(displayMode: FolderMode) {
-        foldersLiveData?.removeObserver(folderListObserver)
-        foldersLiveData = viewModel.getFolders(account, displayMode).apply {
-            observe(this@ChooseFolderActivity, folderListObserver)
-        }
+        viewModel.setDisplayMode(account, displayMode)
     }
 
     private fun returnResult(folderId: Long, displayName: String) {
@@ -201,9 +210,10 @@ class ChooseFolderActivity : K9Activity() {
         if (constraint.isNullOrEmpty()) return true
 
         val locale = Locale.getDefault()
-        val displayName = item.displayName.toLowerCase(locale)
+        val displayName = item.displayName.lowercase(locale)
         return constraint.splitToSequence(" ")
-            .map { it.toLowerCase(locale) }
+            .filter { it.isNotEmpty() }
+            .map { it.lowercase(locale) }
             .any { it in displayName }
     }
 
@@ -216,6 +226,14 @@ class ChooseFolderActivity : K9Activity() {
 
     private fun Bundle.getLongOrNull(name: String): Long? {
         return if (containsKey(name)) getLong(name) else null
+    }
+
+    private fun String.toAction() = Action.valueOf(this)
+
+    enum class Action {
+        MOVE,
+        COPY,
+        CHOOSE
     }
 
     companion object {
@@ -233,6 +251,7 @@ class ChooseFolderActivity : K9Activity() {
         @JvmStatic
         fun buildLaunchIntent(
             context: Context,
+            action: Action,
             accountUuid: String,
             currentFolderId: Long? = null,
             scrollToFolderId: Long? = null,
@@ -240,6 +259,7 @@ class ChooseFolderActivity : K9Activity() {
             messageReference: MessageReference? = null
         ): Intent {
             return Intent(context, ChooseFolderActivity::class.java).apply {
+                this.action = action.toString()
                 putExtra(EXTRA_ACCOUNT, accountUuid)
                 currentFolderId?.let { putExtra(EXTRA_CURRENT_FOLDER_ID, currentFolderId) }
                 scrollToFolderId?.let { putExtra(EXTRA_SCROLL_TO_FOLDER_ID, scrollToFolderId) }

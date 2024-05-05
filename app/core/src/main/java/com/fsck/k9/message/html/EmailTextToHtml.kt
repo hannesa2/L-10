@@ -11,7 +11,7 @@ class EmailTextToHtml private constructor(private val text: String) {
         sections.forEach { section ->
             appendBlockQuoteElement(section.quoteDepth)
 
-            TextToHtml.appendAsHtmlFragment(html, section)
+            TextToHtml.appendAsHtmlFragment(html, section, retainOriginalWhitespace = true)
         }
 
         appendBlockQuoteElement(quoteDepth = 0)
@@ -22,7 +22,7 @@ class EmailTextToHtml private constructor(private val text: String) {
     }
 
     private fun appendHtmlPrefix() {
-        html.append("<pre dir=\"auto\" class=\"$K9MAIL_CSS_CLASS\">")
+        html.append("<pre class=\"$K9MAIL_CSS_CLASS\">")
     }
 
     private fun appendHtmlSuffix() {

@@ -20,14 +20,10 @@ class K9JobManager(
         mailSyncWorkerManager.scheduleMailSync(account)
     }
 
-    fun schedulePusherRefresh() {
-        // Push is temporarily disabled. See GH-4253
-    }
-
     private fun scheduleMailSync() {
         cancelAllMailSyncJobs()
 
-        preferences.availableAccounts.forEach { account ->
+        preferences.accounts.forEach { account ->
             mailSyncWorkerManager.scheduleMailSync(account)
         }
     }

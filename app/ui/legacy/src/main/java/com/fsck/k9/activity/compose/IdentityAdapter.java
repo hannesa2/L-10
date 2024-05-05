@@ -32,8 +32,8 @@ public class IdentityAdapter extends BaseAdapter {
                 Context.LAYOUT_INFLATER_SERVICE);
 
         List<Object> items = new ArrayList<>();
-        Preferences prefs = Preferences.getPreferences(context.getApplicationContext());
-        Collection<Account> accounts = prefs.getAvailableAccounts();
+        Preferences prefs = Preferences.getPreferences();
+        Collection<Account> accounts = prefs.getAccounts();
         for (Account account : accounts) {
             items.add(account);
             List<Identity> identities = account.getIdentities();
@@ -97,7 +97,7 @@ public class IdentityAdapter extends BaseAdapter {
 
             Account account = (Account) item;
             AccountHolder holder = (AccountHolder) view.getTag();
-            holder.name.setText(account.getDescription());
+            holder.name.setText(account.getDisplayName());
             holder.chip.setBackgroundColor(account.getChipColor());
         } else if (item instanceof IdentityContainer) {
             if (convertView != null && convertView.getTag() instanceof IdentityHolder) {

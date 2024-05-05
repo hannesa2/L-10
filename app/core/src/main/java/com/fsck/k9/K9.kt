@@ -6,16 +6,15 @@ import com.fsck.k9.Account.SortType
 import com.fsck.k9.core.BuildConfig
 import com.fsck.k9.mail.K9MailLib
 import com.fsck.k9.mailstore.LocalStore
+import com.fsck.k9.preferences.RealGeneralSettingsManager
 import com.fsck.k9.preferences.Storage
 import com.fsck.k9.preferences.StorageEditor
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import timber.log.Timber
 import timber.log.Timber.DebugTree
 
+@Deprecated("Use GeneralSettingsManager and GeneralSettings instead")
 object K9 : EarlyInit {
-    private val preferences: Preferences by inject()
+    private val generalSettingsManager: RealGeneralSettingsManager by inject()
 
     /**
      * If this is `true`, various development settings will be enabled.
@@ -121,19 +120,10 @@ object K9 : EarlyInit {
     var k9Language = ""
 
     @JvmStatic
-    var appTheme = AppTheme.FOLLOW_SYSTEM
-
-    var messageViewTheme = SubTheme.USE_GLOBAL
-    var messageComposeTheme = SubTheme.USE_GLOBAL
-
-    @JvmStatic
-    var isFixedMessageViewTheme = true
-
-    @JvmStatic
     val fontSizes = FontSizes()
 
     @JvmStatic
-    var backgroundOps = BACKGROUND_OPS.WHEN_CHECKED_AUTO_SYNC
+    var backgroundOps = BACKGROUND_OPS.ALWAYS
 
     @JvmStatic
     var isShowAnimations = true
@@ -155,9 +145,6 @@ object K9 : EarlyInit {
 
     @JvmStatic
     var isConfirmMarkAllRead = true
-
-    @JvmStatic
-    var notificationHideSubject = NotificationHideSubject.NEVER
 
     @JvmStatic
     var notificationQuickDeleteBehaviour = NotificationQuickDelete.ALWAYS
@@ -184,7 +171,7 @@ object K9 : EarlyInit {
     var isChangeContactNameColor = false
 
     @JvmStatic
-    var contactNameColor = 0xff00008f.toInt()
+    var contactNameColor = 0xFF1093F5.toInt()
 
     @JvmStatic
     var isShowContactPicture = true
@@ -202,10 +189,10 @@ object K9 : EarlyInit {
     var isUseVolumeKeysForNavigation = false
 
     @JvmStatic
-    var isUseVolumeKeysForListNavigation = false
+    var isShowUnifiedInbox = true
 
     @JvmStatic
-    var isShowUnifiedInbox = true
+    var isShowStarredCount = false
 
     @JvmStatic
     var isAutoFitWidth: Boolean = false
@@ -229,6 +216,10 @@ object K9 : EarlyInit {
 
     @JvmStatic
     var isUseBackgroundAsUnreadIndicator = false
+
+    @get:Synchronized
+    @set:Synchronized
+    var isShowComposeButtonOnMessageList = true
 
     @get:Synchronized
     @set:Synchronized
@@ -263,13 +254,20 @@ object K9 : EarlyInit {
     @JvmStatic
     var pgpSignOnlyDialogCounter: Int = 0
 
+    @JvmStatic
+    var swipeRightAction: SwipeAction = SwipeAction.ToggleSelection
+
+    @JvmStatic
+    var swipeLeftAction: SwipeAction = SwipeAction.ToggleRead
+
     val isQuietTime: Boolean
         get() {
             if (!isQuietTimeEnabled) {
                 return false
             }
 
-            val quietTimeChecker = QuietTimeChecker(Clock.INSTANCE, quietTimeStarts, quietTimeEnds)
+            val clock = DI.get<Clock>()
+            val quietTimeChecker = QuietTimeChecker(clock, quietTimeStarts, quietTimeEnds)
             return quietTimeChecker.isQuietTime
         }
 
@@ -294,29 +292,21 @@ object K9 : EarlyInit {
 
             override fun debugSensitive(): Boolean = isSensitiveDebugLoggingEnabled
         })
+        com.fsck.k9.logging.Timber.logger = TimberLogger()
 
         checkCachedDatabaseVersion(context)
 
-        loadPrefs(preferences)
+        loadPrefs(generalSettingsManager.storage)
     }
 
-    /**
-     * Load preferences into our statics.
-     *
-     * If you're adding a preference here, odds are you'll need to add it to
-     * [com.fsck.k9.preferences.GeneralSettingsDescriptions], too.
-     *
-     * @param prefs Preferences to load
-     */
     @JvmStatic
-    fun loadPrefs(prefs: Preferences) {
-        val storage = prefs.storage
+    fun loadPrefs(storage: Storage) {
         isDebugLoggingEnabled = storage.getBoolean("enableDebugLogging", DEVELOPER_MODE)
         isSensitiveDebugLoggingEnabled = storage.getBoolean("enableSensitiveLogging", false)
         isShowAnimations = storage.getBoolean("animations", true)
         isUseVolumeKeysForNavigation = storage.getBoolean("useVolumeKeysForNavigation", false)
-        isUseVolumeKeysForListNavigation = storage.getBoolean("useVolumeKeysForListNavigation", false)
         isShowUnifiedInbox = storage.getBoolean("showUnifiedInbox", true)
+        isShowStarredCount = storage.getBoolean("showStarredCount", false)
         isMessageListSenderAboveSubject = storage.getBoolean("messageListSenderAboveSubject", false)
         isShowMessageListStars = storage.getBoolean("messageListStars", true)
         messageListPreviewLines = storage.getInt("messageListPreviewLines", 2)
@@ -332,7 +322,7 @@ object K9 : EarlyInit {
         isShowContactName = storage.getBoolean("showContactName", false)
         isShowContactPicture = storage.getBoolean("showContactPicture", true)
         isChangeContactNameColor = storage.getBoolean("changeRegisteredNameColor", false)
-        contactNameColor = storage.getInt("registeredNameColor", -0xffff71)
+        contactNameColor = storage.getInt("registeredNameColor", 0xFF1093F5.toInt())
         isUseMessageViewFixedWidthFont = storage.getBoolean("messageViewFixedWidthFont", false)
         isMessageViewReturnToList = storage.getBoolean("messageViewReturnToList", false)
         isMessageViewShowNext = storage.getBoolean("messageViewShowNext", false)
@@ -351,7 +341,6 @@ object K9 : EarlyInit {
         val sortAscendingSetting = storage.getBoolean("sortAscending", Account.DEFAULT_SORT_ASCENDING)
         sortAscending[sortType] = sortAscendingSetting
 
-        notificationHideSubject = storage.getEnum("notificationHideSubject", NotificationHideSubject.NEVER)
         notificationQuickDeleteBehaviour = storage.getEnum("notificationQuickDelete", NotificationQuickDelete.ALWAYS)
 
         lockScreenNotificationVisibility = storage.getEnum(
@@ -362,10 +351,11 @@ object K9 : EarlyInit {
         splitViewMode = storage.getEnum("splitViewMode", SplitViewMode.NEVER)
 
         isUseBackgroundAsUnreadIndicator = storage.getBoolean("useBackgroundAsUnreadIndicator", false)
+        isShowComposeButtonOnMessageList = storage.getBoolean("showComposeButtonOnMessageList", true)
         isThreadedViewEnabled = storage.getBoolean("threadedView", true)
         fontSizes.load(storage)
 
-        backgroundOps = storage.getEnum("backgroundOperations", BACKGROUND_OPS.WHEN_CHECKED_AUTO_SYNC)
+        backgroundOps = storage.getEnum("backgroundOperations", BACKGROUND_OPS.ALWAYS)
 
         isColorizeMissingContactPictures = storage.getBoolean("colorizeMissingContactPictures", true)
 
@@ -380,11 +370,8 @@ object K9 : EarlyInit {
 
         k9Language = storage.getString("language", "")
 
-        appTheme = storage.getEnum("theme", AppTheme.FOLLOW_SYSTEM)
-
-        messageViewTheme = storage.getEnum("messageViewTheme", SubTheme.USE_GLOBAL)
-        messageComposeTheme = storage.getEnum("messageComposeTheme", SubTheme.USE_GLOBAL)
-        isFixedMessageViewTheme = storage.getBoolean("fixedMessageViewTheme", true)
+        swipeRightAction = storage.getEnum("swipeRightAction", SwipeAction.ToggleSelection)
+        swipeLeftAction = storage.getEnum("swipeLeftAction", SwipeAction.ToggleRead)
     }
 
     internal fun save(editor: StorageEditor) {
@@ -393,7 +380,6 @@ object K9 : EarlyInit {
         editor.putEnum("backgroundOperations", backgroundOps)
         editor.putBoolean("animations", isShowAnimations)
         editor.putBoolean("useVolumeKeysForNavigation", isUseVolumeKeysForNavigation)
-        editor.putBoolean("useVolumeKeysForListNavigation", isUseVolumeKeysForListNavigation)
         editor.putBoolean("autofitWidth", isAutoFitWidth)
         editor.putBoolean("quietTimeEnabled", isQuietTimeEnabled)
         editor.putBoolean("notificationDuringQuietTimeEnabled", isNotificationDuringQuietTimeEnabled)
@@ -402,6 +388,7 @@ object K9 : EarlyInit {
 
         editor.putBoolean("messageListSenderAboveSubject", isMessageListSenderAboveSubject)
         editor.putBoolean("showUnifiedInbox", isShowUnifiedInbox)
+        editor.putBoolean("showStarredCount", isShowStarredCount)
         editor.putBoolean("messageListStars", isShowMessageListStars)
         editor.putInt("messageListPreviewLines", messageListPreviewLines)
         editor.putBoolean("showCorrespondentNames", isShowCorrespondentNames)
@@ -416,10 +403,6 @@ object K9 : EarlyInit {
         editor.putBoolean("hideTimeZone", isHideTimeZone)
 
         editor.putString("language", k9Language)
-        editor.putEnum("theme", appTheme)
-        editor.putEnum("messageViewTheme", messageViewTheme)
-        editor.putEnum("messageComposeTheme", messageComposeTheme)
-        editor.putBoolean("fixedMessageViewTheme", isFixedMessageViewTheme)
 
         editor.putBoolean("confirmDelete", isConfirmDelete)
         editor.putBoolean("confirmDiscardMessage", isConfirmDiscardMessage)
@@ -431,11 +414,11 @@ object K9 : EarlyInit {
         editor.putEnum("sortTypeEnum", sortType)
         editor.putBoolean("sortAscending", sortAscending[sortType] ?: false)
 
-        editor.putString("notificationHideSubject", notificationHideSubject.toString())
         editor.putString("notificationQuickDelete", notificationQuickDeleteBehaviour.toString())
         editor.putString("lockScreenNotificationVisibility", lockScreenNotificationVisibility.toString())
 
         editor.putBoolean("useBackgroundAsUnreadIndicator", isUseBackgroundAsUnreadIndicator)
+        editor.putBoolean("showComposeButtonOnMessageList", isShowComposeButtonOnMessageList)
         editor.putBoolean("threadedView", isThreadedViewEnabled)
         editor.putEnum("splitViewMode", splitViewMode)
         editor.putBoolean("colorizeMissingContactPictures", isColorizeMissingContactPictures)
@@ -449,6 +432,9 @@ object K9 : EarlyInit {
         editor.putInt("pgpInlineDialogCounter", pgpInlineDialogCounter)
         editor.putInt("pgpSignOnlyDialogCounter", pgpSignOnlyDialogCounter)
 
+        editor.putEnum("swipeRightAction", swipeRightAction)
+        editor.putEnum("swipeLeftAction", swipeLeftAction)
+
         fontSizes.save(editor)
     }
 
@@ -461,9 +447,7 @@ object K9 : EarlyInit {
 
     @JvmStatic
     fun saveSettingsAsync() {
-        GlobalScope.launch(Dispatchers.IO) {
-            preferences.saveSettings()
-        }
+        generalSettingsManager.saveSettingsAsync()
     }
 
     private inline fun <reified T : Enum<T>> Storage.getEnum(key: String, defaultValue: T): T {
@@ -513,29 +497,8 @@ object K9 : EarlyInit {
     const val MAIL_SERVICE_WAKE_LOCK_TIMEOUT = 60000
     const val BOOT_RECEIVER_WAKE_LOCK_TIMEOUT = 60000
 
-    enum class AppTheme {
-        LIGHT,
-        DARK,
-        FOLLOW_SYSTEM
-    }
-
-    enum class SubTheme {
-        LIGHT,
-        DARK,
-        USE_GLOBAL
-    }
-
     enum class BACKGROUND_OPS {
         ALWAYS, NEVER, WHEN_CHECKED_AUTO_SYNC
-    }
-
-    /**
-     * Controls when to hide the subject in the notification area.
-     */
-    enum class NotificationHideSubject {
-        ALWAYS,
-        WHEN_LOCKED,
-        NEVER
     }
 
     /**
@@ -562,15 +525,5 @@ object K9 : EarlyInit {
         ALWAYS,
         NEVER,
         WHEN_IN_LANDSCAPE
-    }
-
-    object Intents {
-        object Share {
-            lateinit var EXTRA_FROM: String
-        }
-
-        internal fun init(packageName: String) {
-            Share.EXTRA_FROM = "$packageName.intent.extra.SENDER"
-        }
     }
 }

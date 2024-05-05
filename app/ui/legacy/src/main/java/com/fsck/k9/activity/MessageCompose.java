@@ -67,6 +67,8 @@ import com.fsck.k9.activity.compose.PgpInlineDialog.OnOpenPgpInlineChangeListene
 import com.fsck.k9.activity.compose.PgpSignOnlyDialog.OnOpenPgpSignOnlyChangeListener;
 import com.fsck.k9.activity.compose.RecipientMvpView;
 import com.fsck.k9.activity.compose.RecipientPresenter;
+import com.fsck.k9.activity.compose.ReplyToPresenter;
+import com.fsck.k9.activity.compose.ReplyToView;
 import com.fsck.k9.activity.compose.SaveMessageTask;
 import com.fsck.k9.activity.misc.Attachment;
 import com.fsck.k9.autocrypt.AutocryptDraftStateHeaderParser;
@@ -163,6 +165,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
     public static final int MSG_SAVED_DRAFT = 4;
     private static final int MSG_DISCARDED_DRAFT = 5;
 
+    private static final int REQUEST_CODE_MASK = 0xFFFF0000;
     private static final int REQUEST_MASK_RECIPIENT_PRESENTER = (1 << 8);
     private static final int REQUEST_MASK_LOADER_HELPER = (1 << 9);
     private static final int REQUEST_MASK_ATTACHMENT_PRESENTER = (1 << 10);
@@ -200,6 +203,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
 
     // relates to the message being replied to, forwarded, or edited TODO split up?
     private MessageReference relatedMessageReference;
+    private Flag relatedFlag = null;
     /**
      * Indicates that the source message has been processed at least once and should not
      * be processed on any subsequent loads. This protects us from adding attachments that
@@ -210,6 +214,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
 
     private RecipientPresenter recipientPresenter;
     private MessageBuilder currentMessageBuilder;
+    private ReplyToPresenter replyToPresenter;
     private boolean finishAfterDraftSaved;
     private boolean alreadyNotifiedUserOfEmptySubject = false;
     private boolean changesMadeSinceLastSave = false;
@@ -235,6 +240,8 @@ public class MessageCompose extends K9Activity implements OnClickListener,
     private boolean isInSubActivity = false;
 
     private boolean navigateUp;
+
+    private boolean sendMessageHasBeenTriggered = false;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -305,6 +312,9 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         chooseIdentityButton = findViewById(R.id.identity);
         chooseIdentityButton.setOnClickListener(this);
 
+        ReplyToView replyToView = new ReplyToView(this);
+        replyToPresenter = new ReplyToPresenter(replyToView);
+
         RecipientMvpView recipientMvpView = new RecipientMvpView(this);
         ComposePgpInlineDecider composePgpInlineDecider = new ComposePgpInlineDecider();
         ComposePgpEnableByDefaultDecider composePgpEnableByDefaultDecider = new ComposePgpEnableByDefaultDecider();
@@ -348,6 +358,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
             }
         };
 
+        replyToView.addTextChangedListener(draftNeedsChangingTextWatcher);
         recipientMvpView.addTextChangedListener(draftNeedsChangingTextWatcher);
         quotedMessageMvpView.addTextChangedListener(draftNeedsChangingTextWatcher);
 
@@ -418,6 +429,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         requestReadReceipt = account.isMessageReadReceipt();
 
         updateFrom();
+        replyToPresenter.setIdentity(identity);
 
         if (!relatedMessageProcessed) {
             if (action == Action.REPLY || action == Action.REPLY_ALL ||
@@ -438,7 +450,9 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         }
 
         if (action == Action.REPLY || action == Action.REPLY_ALL) {
-            relatedMessageReference = relatedMessageReference.withModifiedFlag(Flag.ANSWERED);
+            relatedFlag = Flag.ANSWERED;
+        } else if (action == Action.FORWARD || action == Action.FORWARD_AS_ATTACHMENT) {
+            relatedFlag = Flag.FORWARDED;
         }
 
         if (action == Action.REPLY || action == Action.REPLY_ALL ||
@@ -450,14 +464,11 @@ public class MessageCompose extends K9Activity implements OnClickListener,
             recipientMvpView.requestFocusOnToField();
         }
 
-        if (action == Action.FORWARD || action == Action.FORWARD_AS_ATTACHMENT) {
-            relatedMessageReference = relatedMessageReference.withModifiedFlag(Flag.FORWARDED);
-        }
-
         updateMessageFormat();
 
         // Set font size of input controls
         int fontSize = K9.getFontSizes().getMessageComposeInput();
+        replyToView.setFontSizes(K9.getFontSizes(), fontSize);
         recipientMvpView.setFontSizes(K9.getFontSizes(), fontSize);
         quotedMessageMvpView.setFontSizes(K9.getFontSizes(), fontSize);
         K9.getFontSizes().setViewTextSize(subjectView, fontSize);
@@ -545,7 +556,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
             if (Intent.ACTION_SEND.equals(action)) {
                 Uri stream = intent.getParcelableExtra(Intent.EXTRA_STREAM);
                 if (stream != null) {
-                    attachmentPresenter.addAttachment(stream, type);
+                    attachmentPresenter.addExternalAttachment(stream, type);
                 }
             } else {
                 List<Parcelable> list = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
@@ -553,7 +564,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
                     for (Parcelable parcelable : list) {
                         Uri stream = (Uri) parcelable;
                         if (stream != null) {
-                            attachmentPresenter.addAttachment(stream, type);
+                            attachmentPresenter.addExternalAttachment(stream, type);
                         }
                     }
                 }
@@ -625,6 +636,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         outState.putBoolean(STATE_KEY_CHANGES_MADE_SINCE_LAST_SAVE, changesMadeSinceLastSave);
         outState.putBoolean(STATE_ALREADY_NOTIFIED_USER_OF_EMPTY_SUBJECT, alreadyNotifiedUserOfEmptySubject);
 
+        replyToPresenter.onSaveInstanceState(outState);
         recipientPresenter.onSaveInstanceState(outState);
         quotedMessagePresenter.onSaveInstanceState(outState);
         attachmentPresenter.onSaveInstanceState(outState);
@@ -646,6 +658,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
 
         requestReadReceipt = savedInstanceState.getBoolean(STATE_KEY_READ_RECEIPT);
 
+        replyToPresenter.onRestoreInstanceState(savedInstanceState);
         recipientPresenter.onRestoreInstanceState(savedInstanceState);
         quotedMessagePresenter.onRestoreInstanceState(savedInstanceState);
         attachmentPresenter.onRestoreInstanceState(savedInstanceState);
@@ -683,6 +696,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
 
         ComposeCryptoStatus cryptoStatus = recipientPresenter.getCurrentCachedCryptoStatus();
         if (cryptoStatus == null) {
+            Timber.w("Couldn't retrieve crypto status; not creating MessageBuilder!");
             return null;
         }
 
@@ -709,9 +723,11 @@ public class MessageCompose extends K9Activity implements OnClickListener,
                 .setReferences(referencedMessageIds)
                 .setRequestReadReceipt(requestReadReceipt)
                 .setIdentity(identity)
+                .setReplyTo(replyToPresenter.getAddresses())
                 .setMessageFormat(currentMessageFormat)
                 .setText(CrLfConverter.toCrLf(messageContentView.getText()))
                 .setAttachments(attachmentPresenter.getAttachments())
+                .setInlineAttachments(attachmentPresenter.getInlineAttachments())
                 .setSignature(CrLfConverter.toCrLf(signatureView.getText()))
                 .setSignatureBeforeQuotedText(account.isSignatureBeforeQuotedText())
                 .setIdentityChanged(identityChanged)
@@ -730,6 +746,10 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         if (subjectView.getText().length() == 0 && !alreadyNotifiedUserOfEmptySubject) {
             Toast.makeText(this, R.string.empty_subject, Toast.LENGTH_LONG).show();
             alreadyNotifiedUserOfEmptySubject = true;
+            return;
+        }
+
+        if (replyToPresenter.isNotReadyForSending()) {
             return;
         }
 
@@ -780,8 +800,13 @@ public class MessageCompose extends K9Activity implements OnClickListener,
     }
 
     public void performSendAfterChecks() {
+        if (sendMessageHasBeenTriggered) {
+            return;
+        }
+
         currentMessageBuilder = createMessageBuilder(false);
         if (currentMessageBuilder != null) {
+            sendMessageHasBeenTriggered = true;
             changesMadeSinceLastSave = false;
             setProgressBarIndeterminateVisibility(true);
             currentMessageBuilder.buildAsync(this);
@@ -831,33 +856,36 @@ public class MessageCompose extends K9Activity implements OnClickListener,
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         isInSubActivity = false;
 
-        if ((requestCode & REQUEST_MASK_MESSAGE_BUILDER) == REQUEST_MASK_MESSAGE_BUILDER) {
-            requestCode ^= REQUEST_MASK_MESSAGE_BUILDER;
-            if (currentMessageBuilder == null) {
-                Timber.e("Got a message builder activity result for no message builder, " +
-                        "this is an illegal state!");
+        // Only if none of the high 16 bits are set it might be one of our request codes
+        if ((requestCode & REQUEST_CODE_MASK) == 0) {
+            if ((requestCode & REQUEST_MASK_MESSAGE_BUILDER) == REQUEST_MASK_MESSAGE_BUILDER) {
+                requestCode ^= REQUEST_MASK_MESSAGE_BUILDER;
+                if (currentMessageBuilder == null) {
+                    Timber.e("Got a message builder activity result for no message builder, " +
+                            "this is an illegal state!");
+                    return;
+                }
+                currentMessageBuilder.onActivityResult(requestCode, resultCode, data, this);
                 return;
             }
-            currentMessageBuilder.onActivityResult(requestCode, resultCode, data, this);
-            return;
-        }
 
-        if ((requestCode & REQUEST_MASK_RECIPIENT_PRESENTER) == REQUEST_MASK_RECIPIENT_PRESENTER) {
-            requestCode ^= REQUEST_MASK_RECIPIENT_PRESENTER;
-            recipientPresenter.onActivityResult(requestCode, resultCode, data);
-            return;
-        }
+            if ((requestCode & REQUEST_MASK_RECIPIENT_PRESENTER) == REQUEST_MASK_RECIPIENT_PRESENTER) {
+                requestCode ^= REQUEST_MASK_RECIPIENT_PRESENTER;
+                recipientPresenter.onActivityResult(requestCode, resultCode, data);
+                return;
+            }
 
-        if ((requestCode & REQUEST_MASK_LOADER_HELPER) == REQUEST_MASK_LOADER_HELPER) {
-            requestCode ^= REQUEST_MASK_LOADER_HELPER;
-            messageLoaderHelper.onActivityResult(requestCode, resultCode, data);
-            return;
-        }
+            if ((requestCode & REQUEST_MASK_LOADER_HELPER) == REQUEST_MASK_LOADER_HELPER) {
+                requestCode ^= REQUEST_MASK_LOADER_HELPER;
+                messageLoaderHelper.onActivityResult(requestCode, resultCode, data);
+                return;
+            }
 
-        if ((requestCode & REQUEST_MASK_ATTACHMENT_PRESENTER) == REQUEST_MASK_ATTACHMENT_PRESENTER) {
-            requestCode ^= REQUEST_MASK_ATTACHMENT_PRESENTER;
-            attachmentPresenter.onActivityResult(resultCode, requestCode, data);
-            return;
+            if ((requestCode & REQUEST_MASK_ATTACHMENT_PRESENTER) == REQUEST_MASK_ATTACHMENT_PRESENTER) {
+                requestCode ^= REQUEST_MASK_ATTACHMENT_PRESENTER;
+                attachmentPresenter.onActivityResult(resultCode, requestCode, data);
+                return;
+            }
         }
 
         super.onActivityResult(requestCode, resultCode, data);
@@ -915,7 +943,8 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         updateFrom();
         updateSignature();
         updateMessageFormat();
-        recipientPresenter.onSwitchIdentity(identity);
+        replyToPresenter.setIdentity(identity);
+        recipientPresenter.onSwitchIdentity();
     }
 
     private void updateFrom() {
@@ -937,6 +966,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         int id = v.getId();
         if (id == R.id.message_content || id == R.id.subject) {
             if (hasFocus) {
+                replyToPresenter.onNonRecipientFieldFocused();
                 recipientPresenter.onNonRecipientFieldFocused();
             }
         }
@@ -1350,6 +1380,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         draftMessageId = messagingController.getId(message);
         subjectView.setText(messageViewInfo.subject);
 
+        replyToPresenter.initFromDraftMessage(message);
         recipientPresenter.initFromDraftMessage(message);
 
         // Read In-Reply-To header from draft
@@ -1365,7 +1396,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         }
 
         if (!relatedMessageProcessed) {
-            attachmentPresenter.loadNonInlineAttachments(messageViewInfo);
+            attachmentPresenter.loadAllAvailableAttachments(messageViewInfo);
         }
 
         // Decode the identity header when loading a draft.
@@ -1425,6 +1456,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
 
         updateSignature();
         updateFrom();
+        replyToPresenter.setIdentity(identity);
 
         quotedMessagePresenter.processDraftMessage(messageViewInfo, k9identity);
     }
@@ -1438,10 +1470,11 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         final Long draftId;
         final String plaintextSubject;
         final MessageReference messageReference;
+        final Flag flag;
 
         SendMessageTask(MessagingController messagingController, Preferences preferences, Account account,
                 Contacts contacts, Message message, Long draftId, String plaintextSubject,
-                MessageReference messageReference) {
+                MessageReference messageReference, Flag flag) {
             this.messagingController = messagingController;
             this.preferences = preferences;
             this.account = account;
@@ -1450,6 +1483,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
             this.draftId = draftId;
             this.plaintextSubject = plaintextSubject;
             this.messageReference = messageReference;
+            this.flag = flag;
         }
 
         @Override
@@ -1458,7 +1492,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
                 contacts.markAsContacted(message.getRecipients(RecipientType.TO));
                 contacts.markAsContacted(message.getRecipients(RecipientType.CC));
                 contacts.markAsContacted(message.getRecipients(RecipientType.BCC));
-                updateReferencedMessage();
+                addFlagToReferencedMessage();
             } catch (Exception e) {
                 Timber.e(e, "Failed to mark contact as contacted.");
             }
@@ -1466,7 +1500,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
             messagingController.sendMessage(account, message, plaintextSubject, null);
             if (draftId != null) {
                 // TODO set draft id to invalid in MessageCompose!
-                messagingController.deleteDraft(account, draftId);
+                messagingController.deleteDraftSkippingTrashFolder(account, draftId);
             }
 
             return null;
@@ -1475,13 +1509,12 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         /**
          * Set the flag on the referenced message(indicated we replied / forwarded the message)
          **/
-        private void updateReferencedMessage() {
-            if (messageReference != null && messageReference.getFlag() != null) {
+        private void addFlagToReferencedMessage() {
+            if (messageReference != null && flag != null) {
                 String accountUuid = messageReference.getAccountUuid();
                 Account account = preferences.getAccount(accountUuid);
                 long folderId = messageReference.getFolderId();
                 String sourceMessageUid = messageReference.getUid();
-                Flag flag = messageReference.getFlag();
 
                 Timber.d("Setting referenced message (%d, %s) flag to %s", folderId, sourceMessageUid, flag);
 
@@ -1575,13 +1608,14 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         } else {
             currentMessageBuilder = null;
             new SendMessageTask(messagingController, preferences, account, contacts, message,
-                    draftMessageId, plaintextSubject, relatedMessageReference).execute();
+                    draftMessageId, plaintextSubject, relatedMessageReference, relatedFlag).execute();
             finish();
         }
     }
 
     @Override
     public void onMessageBuildCancel() {
+        sendMessageHasBeenTriggered = false;
         currentMessageBuilder = null;
         setProgressBarIndeterminateVisibility(false);
     }
@@ -1591,6 +1625,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         Timber.e(me, "Error sending message");
         Toast.makeText(MessageCompose.this,
                 getString(R.string.send_failed_reason, me.getLocalizedMessage()), Toast.LENGTH_LONG).show();
+        sendMessageHasBeenTriggered = false;
         currentMessageBuilder = null;
         setProgressBarIndeterminateVisibility(false);
     }
@@ -1666,7 +1701,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         }
 
         @Override
-        public void startIntentSenderForMessageLoaderHelper(IntentSender si, int requestCode, Intent fillIntent,
+        public boolean startIntentSenderForMessageLoaderHelper(IntentSender si, int requestCode, Intent fillIntent,
                 int flagsMask, int flagValues, int extraFlags) {
             try {
                 requestCode |= REQUEST_MASK_LOADER_HELPER;
@@ -1674,6 +1709,8 @@ public class MessageCompose extends K9Activity implements OnClickListener,
             } catch (SendIntentException e) {
                 Timber.e(e, "Irrecoverable error calling PendingIntent!");
             }
+
+            return true;
         }
 
         @Override

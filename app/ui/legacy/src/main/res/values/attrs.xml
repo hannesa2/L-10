@@ -2,7 +2,12 @@
 <resources>
 
     <declare-styleable name="K9Styles">
+        <attr name="toolbarColor" format="reference|color" />
+        <attr name="messageHeaderBackground" format="reference|color" />
+        <attr name="extraMessageHeaderBackground" format="reference|color" />
         <attr name="bottomBarBackground" format="reference|color" />
+        <attr name="floatingActionButtonBackgroundColor" format="reference|color" />
+        <attr name="floatingActionButtonForegroundColor" format="reference|color" />
         <attr name="iconUnifiedInbox" format="reference" />
         <attr name="iconFolder" format="reference" />
         <attr name="iconFolderInbox" format="reference" />
@@ -19,8 +24,6 @@
         <attr name="iconActionMove" format="reference" />
         <attr name="iconActionCopy" format="reference" />
         <attr name="iconActionNextStatus" format="reference" />
-        <attr name="iconActionNextMessage" format="reference" />
-        <attr name="iconActionPreviousMessage" format="reference" />
         <attr name="iconActionRefresh" format="reference" />
         <attr name="iconActionSearch" format="reference" />
         <attr name="iconActionSearchFolder" format="reference" />
@@ -39,6 +42,7 @@
         <attr name="iconActionUpload" format="reference" />
         <attr name="iconActionSelectAll" format="reference" />
         <attr name="iconActionSave" format="reference" />
+        <attr name="iconActionSaveAttachment" format="reference" />
         <attr name="iconActionCancel" format="reference" />
         <attr name="iconActionRequestReadReceipt" format="reference" />
         <attr name="iconActionExpand" format="reference" />
@@ -65,12 +69,18 @@
         <attr name="textColorPrimaryRecipientDropdown" format="reference" />
         <attr name="textColorSecondaryRecipientDropdown" format="reference" />
         <attr name="backgroundColorChooseAccountHeader" format="color" />
+        <attr name="messageListSelectedCheckMarkColor" format="reference|color"/>
         <attr name="messageListSelectedBackgroundColor" format="reference|color"/>
+        <attr name="messageListSelectedBackgroundAlphaFraction" format="fraction"/>
+        <attr name="messageListSelectedBackgroundAlphaBackground" format="reference|color"/>
+        <attr name="messageListRegularItemBackgroundColor" format="reference|color"/>
         <attr name="messageListReadItemBackgroundColor" format="reference|color"/>
         <attr name="messageListUnreadItemBackgroundColor" format="reference|color"/>
         <attr name="messageListThreadCountForegroundColor" format="reference|color"/>
         <attr name="messageListThreadCountBackground" format="reference|color"/>
         <attr name="messageListActiveItemBackgroundColor" format="reference|color"/>
+        <attr name="messageListActiveItemBackgroundAlphaFraction" format="fraction"/>
+        <attr name="messageListActiveItemBackgroundAlphaBackground" format="reference|color"/>
         <attr name="messageListPreviewTextColor" format="reference|color"/>
         <attr name="messageListDividerColor" format="reference|color"/>
         <attr name="messageListStateIconTint" format="reference|color"/>
@@ -78,12 +88,33 @@
         <attr name="messageListAnswered" format="reference"/>
         <attr name="messageListForwarded" format="reference"/>
         <attr name="messageListAnsweredForwarded" format="reference"/>
+        <attr name="messageListSwipeIconTint" format="reference|color"/>
+        <attr name="messageListSwipeDisabledBackgroundColor" format="reference|color"/>
+        <attr name="messageListSwipeSelectIcon" format="reference"/>
+        <attr name="messageListSwipeSelectBackgroundColor" format="reference|color"/>
+        <attr name="messageListSwipeMarkAsReadIcon" format="reference"/>
+        <attr name="messageListSwipeMarkAsUnreadIcon" format="reference"/>
+        <attr name="messageListSwipeToggleReadBackgroundColor" format="reference|color"/>
+        <attr name="messageListSwipeAddStarIcon" format="reference"/>
+        <attr name="messageListSwipeRemoveStarIcon" format="reference"/>
+        <attr name="messageListSwipeToggleStarBackgroundColor" format="reference|color"/>
+        <attr name="messageListSwipeArchiveIcon" format="reference"/>
+        <attr name="messageListSwipeArchiveBackgroundColor" format="reference|color"/>
+        <attr name="messageListSwipeDeleteIcon" format="reference"/>
+        <attr name="messageListSwipeDeleteBackgroundColor" format="reference|color"/>
+        <attr name="messageListSwipeSpamIcon" format="reference"/>
+        <attr name="messageListSwipeSpamBackgroundColor" format="reference|color"/>
+        <attr name="messageListSwipeMoveIcon" format="reference"/>
+        <attr name="messageListSwipeMoveBackgroundColor" format="reference|color"/>
         <attr name="messageStar" format="reference"/>
+        <attr name="messageStarColor" format="color"/>
         <attr name="messageViewBackgroundColor" format="reference|color"/>
-        <attr name="messageComposeAddContactImage" format="reference"/>
+        <attr name="messageDetailsAddContactIcon" format="reference"/>
+        <attr name="messageDetailsDividerColor" format="reference|color"/>
         <attr name="attachmentCardBackground" format="reference|color"/>
         <attr name="composerBackgroundColor" format="color"/>
         <attr name="contactPictureFallbackDefaultBackgroundColor" format="reference|color"/>
+        <attr name="contactPictureFallbackBackgroundColors" format="reference"/>
         <attr name="contactTokenBackgroundColor" format="reference|color"/>
         <attr name="tintColorBulletPointPositive" format="reference|color"/>
         <attr name="tintColorBulletPointNeutral" format="reference|color"/>
@@ -97,6 +128,8 @@
         <attr name="iconAboutTwitter" format="reference"/>
         <attr name="iconAboutFediverse" format="reference"/>
         <attr name="iconUserForum" format="reference"/>
+        <attr name="iconUserManual" format="reference"/>
+        <attr name="iconHelp" format="reference"/>
 
         <attr name="unencryptedAttachmentUnlock" format="reference|color" />
         <attr name="openpgp_black" format="reference|color" />

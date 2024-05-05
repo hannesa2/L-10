@@ -10,13 +10,14 @@ import com.fsck.k9.AccountPreferenceSerializer.Companion.IDENTITY_EMAIL_KEY
 import com.fsck.k9.AccountPreferenceSerializer.Companion.IDENTITY_NAME_KEY
 import com.fsck.k9.Preferences
 import com.fsck.k9.mailstore.FolderRepository
-import com.fsck.k9.mailstore.FolderRepositoryManager
+import com.fsck.k9.notification.NotificationSettingsUpdater
 import com.fsck.k9.preferences.ServerTypeConverter.fromServerSettingsType
 import com.fsck.k9.preferences.Settings.InvalidSettingValueException
 import com.fsck.k9.preferences.Settings.SettingsDescription
 import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 import org.xmlpull.v1.XmlSerializer
 import timber.log.Timber
 
@@ -24,21 +25,33 @@ class SettingsExporter(
     private val contentResolver: ContentResolver,
     private val preferences: Preferences,
     private val folderSettingsProvider: FolderSettingsProvider,
-    private val folderRepositoryManager: FolderRepositoryManager
+    private val folderRepository: FolderRepository,
+    private val notificationSettingsUpdater: NotificationSettingsUpdater
 ) {
     @Throws(SettingsImportExportException::class)
-    fun exportToUri(includeGlobals: Boolean, accountUuids: Set<String>, uri: Uri) {
+    fun exportToUri(includeGlobals: Boolean, accountUuids: Set<String>, uri: Uri, withPassword: Boolean) {
+        updateNotificationSettings(accountUuids)
         try {
-            contentResolver.openOutputStream(uri)!!.use { outputStream ->
-                exportPreferences(outputStream, includeGlobals, accountUuids)
+            contentResolver.openOutputStream(uri, "wt")!!.use { outputStream ->
+                exportPreferences(outputStream, includeGlobals, accountUuids, withPassword)
             }
         } catch (e: Exception) {
             throw SettingsImportExportException(e)
         }
     }
 
+    private fun updateNotificationSettings(accountUuids: Set<String>) {
+        try {
+            notificationSettingsUpdater.updateNotificationSettings(accountUuids)
+        } catch (e: Exception) {
+            // An error here could mean we export notification settings that don't reflect the current configuration
+            // of the notification channels. But we prefer stale data over failing the export.
+            Timber.w(e, "Error while updating accounts with notification configuration from system")
+        }
+    }
+
     @Throws(SettingsImportExportException::class)
-    fun exportPreferences(outputStream: OutputStream, includeGlobals: Boolean, accountUuids: Set<String>) {
+    fun exportPreferences(outputStream: OutputStream, includeGlobals: Boolean, accountUuids: Set<String>, withPassword: Boolean) {
         try {
             val serializer = Xml.newSerializer()
             serializer.setOutput(outputStream, "UTF-8")
@@ -66,7 +79,7 @@ class SettingsExporter(
             serializer.startTag(null, ACCOUNTS_ELEMENT)
             for (accountUuid in accountUuids) {
                 preferences.getAccount(accountUuid)?.let { account ->
-                    writeAccount(serializer, account, prefs)
+                    writeAccount(serializer, account, prefs, withPassword)
                 }
             }
             serializer.endTag(null, ACCOUNTS_ELEMENT)
@@ -91,7 +104,8 @@ class SettingsExporter(
                 } catch (e: InvalidSettingValueException) {
                     Timber.w(
                         "Global setting \"%s\" has invalid value \"%s\" in preference storage. This shouldn't happen!",
-                        key, valueString
+                        key,
+                        valueString
                     )
                 }
             } else {
@@ -101,7 +115,7 @@ class SettingsExporter(
         }
     }
 
-    private fun writeAccount(serializer: XmlSerializer, account: Account, prefs: Map<String, Any>) {
+    private fun writeAccount(serializer: XmlSerializer, account: Account, prefs: Map<String, Any>, withPassword: Boolean) {
         val identities = mutableSetOf<Int>()
         val accountUuid = account.uuid
 
@@ -127,9 +141,9 @@ class SettingsExporter(
         writeElement(serializer, CONNECTION_SECURITY_ELEMENT, incoming.connectionSecurity.name)
         writeElement(serializer, AUTHENTICATION_TYPE_ELEMENT, incoming.authenticationType.name)
         writeElement(serializer, USERNAME_ELEMENT, incoming.username)
+        if (withPassword)
+            writeElement(serializer, PASSWORD_ELEMENT, incoming.password)
         writeElement(serializer, CLIENT_CERTIFICATE_ALIAS_ELEMENT, incoming.clientCertificateAlias)
-        // XXX For now we don't export the password
-        // writeElement(serializer, PASSWORD_ELEMENT, incoming.password);
 
         var extras = incoming.extra
         if (!extras.isNullOrEmpty()) {
@@ -153,9 +167,9 @@ class SettingsExporter(
         writeElement(serializer, CONNECTION_SECURITY_ELEMENT, outgoing.connectionSecurity.name)
         writeElement(serializer, AUTHENTICATION_TYPE_ELEMENT, outgoing.authenticationType.name)
         writeElement(serializer, USERNAME_ELEMENT, outgoing.username)
+        if (withPassword)
+            writeElement(serializer, PASSWORD_ELEMENT, outgoing.password)
         writeElement(serializer, CLIENT_CERTIFICATE_ALIAS_ELEMENT, outgoing.clientCertificateAlias)
-        // XXX For now we don't export the password
-        // writeElement(serializer, PASSWORD_ELEMENT, outgoing.password);
 
         extras = outgoing.extra
         if (!extras.isNullOrEmpty()) {
@@ -211,7 +225,6 @@ class SettingsExporter(
             }
         }
 
-        val folderRepository = folderRepositoryManager.getFolderRepository(account)
         writeFolderNameSettings(account, folderRepository, serializer)
 
         serializer.endTag(null, SETTINGS_ELEMENT)
@@ -258,7 +271,9 @@ class SettingsExporter(
                     Timber.w(
                         "Account setting \"%s\" (%s) has invalid value \"%s\" in preference storage. " +
                             "This shouldn't happen!",
-                        keyPart, account.description, valueString
+                        keyPart,
+                        account,
+                        valueString
                     )
                 }
             }
@@ -270,17 +285,29 @@ class SettingsExporter(
         folderRepository: FolderRepository,
         serializer: XmlSerializer
     ) {
-        fun writeFolderNameSetting(key: String, folderId: Long?, importedFolderServerId: String?) {
+        fun writeFolderNameSetting(
+            key: String,
+            folderId: Long?,
+            importedFolderServerId: String?,
+            writeEmptyValue: Boolean = false
+        ) {
             val folderServerId = folderId?.let {
-                folderRepository.getFolderServerId(folderId)
+                folderRepository.getFolderServerId(account, folderId)
             } ?: importedFolderServerId
 
             if (folderServerId != null) {
                 writeAccountSettingIfValid(serializer, key, folderServerId, account)
+            } else if (writeEmptyValue) {
+                writeAccountSettingIfValid(serializer, key, valueString = "", account)
             }
         }
 
-        writeFolderNameSetting("autoExpandFolderName", account.autoExpandFolderId, account.importedAutoExpandFolder)
+        writeFolderNameSetting(
+            "autoExpandFolderName",
+            account.autoExpandFolderId,
+            account.importedAutoExpandFolder,
+            writeEmptyValue = true
+        )
         writeFolderNameSetting("archiveFolderName", account.archiveFolderId, account.importedArchiveFolder)
         writeFolderNameSetting("draftsFolderName", account.draftsFolderId, account.importedDraftsFolder)
         writeFolderNameSetting("sentFolderName", account.sentFolderId, account.importedSentFolder)
@@ -350,7 +377,8 @@ class SettingsExporter(
                         Timber.w(
                             "Identity setting \"%s\" has invalid value \"%s\" in preference storage. " +
                                 "This shouldn't happen!",
-                            identityKey, valueString
+                            identityKey,
+                            valueString
                         )
                     }
                 }
@@ -388,7 +416,8 @@ class SettingsExporter(
                 } catch (e: InvalidSettingValueException) {
                     Timber.w(
                         "Folder setting \"%s\" has invalid value \"%s\" in preference storage. This shouldn't happen!",
-                        key, value
+                        key,
+                        value
                     )
                 }
             }
@@ -435,7 +464,7 @@ class SettingsExporter(
 
     fun generateDatedExportFileName(): String {
         val now = Calendar.getInstance()
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd")
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         return String.format("%s_%s.%s", EXPORT_FILENAME_PREFIX, dateFormat.format(now.time), EXPORT_FILENAME_SUFFIX)
     }
 

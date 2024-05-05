@@ -115,7 +115,7 @@ public class UpgradeDatabases extends K9Activity {
             return;
         }
 
-        mPreferences = Preferences.getPreferences(getApplicationContext());
+        mPreferences = Preferences.getPreferences();
 
         initializeLayout();
 
@@ -127,6 +127,7 @@ public class UpgradeDatabases extends K9Activity {
      */
     private void initializeLayout() {
         setLayout(R.layout.upgrade_databases);
+        setTitle(R.string.upgrade_databases_title);
 
         mUpgradeText = findViewById(R.id.databaseUpgradeText);
     }
@@ -206,8 +207,7 @@ public class UpgradeDatabases extends K9Activity {
                 Account account = mPreferences.getAccount(accountUuid);
 
                 if (account != null) {
-                    String formatString = getString(R.string.upgrade_database_format);
-                    String upgradeStatus = String.format(formatString, account.getDescription());
+                    String upgradeStatus = getString(R.string.upgrade_database_format, account.getDisplayName());
                     mUpgradeText.setText(upgradeStatus);
                 }
 

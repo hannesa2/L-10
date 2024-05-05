@@ -30,13 +30,14 @@ public class ChooseIdentity extends K9ListActivity {
 
         requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS);
         setLayout(R.layout.list_content_simple);
+        setTitle(R.string.choose_identity_title);
 
         getListView().setTextFilterEnabled(true);
         getListView().setItemsCanFocus(false);
         getListView().setChoiceMode(ListView.CHOICE_MODE_NONE);
         Intent intent = getIntent();
         String accountUuid = intent.getStringExtra(EXTRA_ACCOUNT);
-        mAccount = Preferences.getPreferences(this).getAccount(accountUuid);
+        mAccount = Preferences.getPreferences().getAccount(accountUuid);
 
         adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1);
 

@@ -1,13 +1,11 @@
 package com.fsck.k9
 
+import com.fsck.k9.notification.PushNotificationState
+
 class TestCoreResourceProvider : CoreResourceProvider {
     override fun defaultSignature() = throw UnsupportedOperationException("not implemented")
 
     override fun defaultIdentityDescription() = throw UnsupportedOperationException("not implemented")
-
-    override fun internalStorageProviderName() = throw UnsupportedOperationException("not implemented")
-
-    override fun externalStorageProviderName() = throw UnsupportedOperationException("not implemented")
 
     override fun contactDisplayNamePrefix() = throw UnsupportedOperationException("not implemented")
     override fun contactUnknownSender() = throw UnsupportedOperationException("not implemented")
@@ -28,10 +26,17 @@ class TestCoreResourceProvider : CoreResourceProvider {
     override fun replyHeader(sender: String) = throw UnsupportedOperationException("not implemented")
     override fun replyHeader(sender: String, sentDate: String) = throw UnsupportedOperationException("not implemented")
 
-    override fun searchAllMessagesTitle() = throw UnsupportedOperationException("not implemented")
-    override fun searchAllMessagesDetail() = throw UnsupportedOperationException("not implemented")
     override fun searchUnifiedInboxTitle() = throw UnsupportedOperationException("not implemented")
     override fun searchUnifiedInboxDetail() = throw UnsupportedOperationException("not implemented")
 
     override fun outboxFolderName() = throw UnsupportedOperationException("not implemented")
+
+    override val iconPushNotification: Int
+        get() = throw UnsupportedOperationException("not implemented")
+
+    override fun pushNotificationText(notificationState: PushNotificationState): String {
+        throw UnsupportedOperationException("not implemented")
+    }
+
+    override fun pushNotificationInfoText(): String = throw UnsupportedOperationException("not implemented")
 }

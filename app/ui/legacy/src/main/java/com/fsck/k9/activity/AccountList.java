@@ -15,7 +15,6 @@ import android.widget.TextView;
 
 import com.fsck.k9.Account;
 import com.fsck.k9.BaseAccount;
-import com.fsck.k9.FontSizes;
 import com.fsck.k9.K9;
 import com.fsck.k9.Preferences;
 import com.fsck.k9.ui.R;
@@ -31,7 +30,6 @@ import com.fsck.k9.search.SearchAccount;
  * </p>
  */
 public abstract class AccountList extends K9ListActivity implements OnItemClickListener {
-    private FontSizes mFontSizes = K9.getFontSizes();
 
     @Override
     public void onCreate(Bundle icicle) {
@@ -116,19 +114,15 @@ public abstract class AccountList extends K9ListActivity implements OnItemClickL
                 view.setTag(holder);
             }
 
-            String description = account.getDescription();
-            if (account.getEmail().equals(description)) {
-                holder.email.setVisibility(View.GONE);
-            } else {
-                holder.email.setVisibility(View.VISIBLE);
+            String accountName = account.getName();
+            if (accountName != null) {
+                holder.description.setText(accountName);
                 holder.email.setText(account.getEmail());
+                holder.email.setVisibility(View.VISIBLE);
+            } else {
+                holder.description.setText(account.getEmail());
+                holder.email.setVisibility(View.GONE);
             }
-
-            if (description == null || description.isEmpty()) {
-                description = account.getEmail();
-            }
-
-            holder.description.setText(description);
 
             if (account instanceof Account) {
                 Account realAccount = (Account) account;
@@ -138,9 +132,6 @@ public abstract class AccountList extends K9ListActivity implements OnItemClickL
             }
 
             holder.chip.getBackground().setAlpha(255);
-
-            mFontSizes.setViewTextSize(holder.description, mFontSizes.getAccountName());
-            mFontSizes.setViewTextSize(holder.email, mFontSizes.getAccountDescription());
 
 
             return view;
@@ -159,7 +150,7 @@ public abstract class AccountList extends K9ListActivity implements OnItemClickL
     class LoadAccounts extends AsyncTask<Void, Void, List<Account>> {
         @Override
         protected List<Account> doInBackground(Void... params) {
-            return Preferences.getPreferences(getApplicationContext()).getAccounts();
+            return Preferences.getPreferences().getAccounts();
         }
 
         @Override

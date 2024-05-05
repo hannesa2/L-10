@@ -8,11 +8,10 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
-import androidx.annotation.NonNull;
-
+import com.fsck.k9.logging.Timber;
 import com.fsck.k9.mail.filter.CountingOutputStream;
 import com.fsck.k9.mail.filter.EOLConvertingOutputStream;
-import timber.log.Timber;
+import org.jetbrains.annotations.NotNull;
 
 
 public abstract class Message implements Part, Body {
@@ -98,7 +97,7 @@ public abstract class Message implements Part, Body {
     @Override
     public abstract void setHeader(String name, String value);
 
-    @NonNull
+    @NotNull
     @Override
     public abstract String[] getHeader(String name);
 
@@ -159,16 +158,12 @@ public abstract class Message implements Part, Body {
     public abstract void setEncoding(String encoding) throws MessagingException;
 
     public long calculateSize() {
-        try {
-
-            CountingOutputStream out = new CountingOutputStream();
+        try (CountingOutputStream out = new CountingOutputStream()) {
             EOLConvertingOutputStream eolOut = new EOLConvertingOutputStream(out);
             writeTo(eolOut);
             eolOut.flush();
             return out.getCount();
-        } catch (IOException e) {
-            Timber.e(e, "Failed to calculate a message size");
-        } catch (MessagingException e) {
+        } catch (IOException | MessagingException e) {
             Timber.e(e, "Failed to calculate a message size");
         }
         return 0;

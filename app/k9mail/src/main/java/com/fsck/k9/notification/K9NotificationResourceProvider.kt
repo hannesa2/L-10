@@ -1,7 +1,7 @@
 package com.fsck.k9.notification
 
 import android.content.Context
-import com.fsck.k9.R
+import com.fsck.k9.ui.R
 
 class K9NotificationResourceProvider(private val context: Context) : NotificationResourceProvider {
     override val iconWarning: Int = R.drawable.notification_icon_warning
@@ -17,6 +17,10 @@ class K9NotificationResourceProvider(private val context: Context) : Notificatio
     override val wearIconReplyAll: Int = R.drawable.notification_action_reply
     override val wearIconMarkAsSpam: Int = R.drawable.notification_action_mark_as_spam
 
+    override val pushChannelName: String
+        get() = context.getString(R.string.notification_channel_push_title)
+    override val pushChannelDescription: String
+        get() = context.getString(R.string.notification_channel_push_description)
     override val messagesChannelName: String
         get() = context.getString(R.string.notification_channel_messages_title)
     override val messagesChannelDescription: String
@@ -32,20 +36,22 @@ class K9NotificationResourceProvider(private val context: Context) : Notificatio
     override fun authenticationErrorBody(accountName: String): String =
         context.getString(R.string.notification_authentication_error_text, accountName)
 
+    override fun notifyErrorTitle(): String = context.getString(R.string.notification_notify_error_title)
+
+    override fun notifyErrorText(): String = context.getString(R.string.notification_notify_error_text)
+
+    override fun certificateErrorTitle(): String = context.getString(R.string.notification_certificate_error_public)
+
     override fun certificateErrorTitle(accountName: String): String =
         context.getString(R.string.notification_certificate_error_title, accountName)
 
     override fun certificateErrorBody(): String = context.getString(R.string.notification_certificate_error_text)
 
-    override fun newMailTitle(): String = context.getString(R.string.notification_new_title)
-
-    override fun newMailUnreadMessageCount(unreadMessageCount: Int, accountName: String): String =
-        context.getString(R.string.notification_new_one_account_fmt, unreadMessageCount, accountName)
-
     override fun newMessagesTitle(newMessagesCount: Int): String =
         context.resources.getQuantityString(
             R.plurals.notification_new_messages_title,
-            newMessagesCount, newMessagesCount
+            newMessagesCount,
+            newMessagesCount
         )
 
     override fun additionalMessages(overflowMessagesCount: Int, accountName: String): String =

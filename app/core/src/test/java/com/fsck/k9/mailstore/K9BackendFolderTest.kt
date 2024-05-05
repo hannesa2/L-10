@@ -1,7 +1,6 @@
 package com.fsck.k9.mailstore
 
 import android.database.sqlite.SQLiteDatabase
-import android.net.Uri
 import androidx.core.content.contentValuesOf
 import com.fsck.k9.Account
 import com.fsck.k9.K9RobolectricTest
@@ -13,15 +12,14 @@ import com.fsck.k9.mail.Address
 import com.fsck.k9.mail.Flag
 import com.fsck.k9.mail.FolderType
 import com.fsck.k9.mail.Message
+import com.fsck.k9.mail.MessageDownloadState
 import com.fsck.k9.mail.internet.MimeMessage
 import com.fsck.k9.mail.internet.MimeMessageHelper
 import com.fsck.k9.mail.internet.TextBody
-import com.fsck.k9.provider.EmailProvider
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
-import org.junit.Before
 import org.junit.Test
 import org.koin.core.component.inject
 
@@ -34,12 +32,6 @@ class K9BackendFolderTest : K9RobolectricTest() {
     val account: Account = createAccount()
     val backendFolder = createBackendFolder()
     val database: LockableDatabase = localStoreProvider.getInstance(account).database
-
-    @Before
-    fun setUp() {
-        // Set EmailProvider.CONTENT_URI so LocalStore.notifyChange() won't crash
-        EmailProvider.CONTENT_URI = Uri.parse("content://dummy")
-    }
 
     @After
     fun tearDown() {
@@ -78,21 +70,11 @@ class K9BackendFolderTest : K9RobolectricTest() {
     }
 
     @Test
-    fun getLastUid() {
-        createMessageInBackendFolder("200")
-        createMessageInBackendFolder("123")
-
-        val lastUid = backendFolder.getLastUid()
-
-        assertEquals(200L, lastUid)
-    }
-
-    @Test
     fun saveCompleteMessage_withoutServerId_shouldThrow() {
         val message = createMessage(messageServerId = null)
 
         try {
-            backendFolder.saveCompleteMessage(message)
+            backendFolder.saveMessage(message, MessageDownloadState.FULL)
             fail("Expected exception")
         } catch (e: IllegalStateException) {
         }
@@ -103,7 +85,7 @@ class K9BackendFolderTest : K9RobolectricTest() {
         val message = createMessage(messageServerId = null)
 
         try {
-            backendFolder.savePartialMessage(message)
+            backendFolder.saveMessage(message, MessageDownloadState.PARTIAL)
             fail("Expected exception")
         } catch (e: IllegalStateException) {
         }
@@ -136,7 +118,7 @@ class K9BackendFolderTest : K9RobolectricTest() {
 
     fun createMessageInBackendFolder(messageServerId: String, flags: Set<Flag> = emptySet()) {
         val message = createMessage(messageServerId, flags)
-        backendFolder.saveCompleteMessage(message)
+        backendFolder.saveMessage(message, MessageDownloadState.FULL)
 
         val messageServerIds = backendFolder.getMessageServerIds()
         assertTrue(messageServerId in messageServerIds)

@@ -4,6 +4,7 @@ package com.fsck.k9.activity.compose;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import android.app.Activity;
 import android.content.ClipData;
@@ -19,6 +20,7 @@ import com.fsck.k9.activity.compose.ComposeCryptoStatus.AttachErrorState;
 import com.fsck.k9.activity.loader.AttachmentContentLoader;
 import com.fsck.k9.activity.loader.AttachmentInfoLoader;
 import com.fsck.k9.activity.misc.Attachment;
+import com.fsck.k9.activity.misc.InlineAttachment;
 import com.fsck.k9.controller.MessageReference;
 import com.fsck.k9.mail.MessagingException;
 import com.fsck.k9.mailstore.AttachmentViewInfo;
@@ -46,7 +48,8 @@ public class AttachmentPresenter {
     private final AttachmentsChangedListener listener;
 
     // persistent state
-    private LinkedHashMap<Uri, Attachment> attachments;
+    private final LinkedHashMap<Uri, Attachment> attachments;
+    private final LinkedHashMap<Uri, InlineAttachment> inlineAttachments;
     private int nextLoaderId = 0;
     private WaitingAction actionToPerformAfterWaiting = WaitingAction.NONE;
 
@@ -59,6 +62,7 @@ public class AttachmentPresenter {
         this.listener = listener;
 
         attachments = new LinkedHashMap<>();
+        inlineAttachments = new LinkedHashMap<>();
     }
 
     public void onSaveInstanceState(Bundle outState) {
@@ -122,6 +126,14 @@ public class AttachmentPresenter {
         return new ArrayList<>(attachments.values());
     }
 
+    public Map<String, com.fsck.k9.message.Attachment> getInlineAttachments() {
+        Map<String, com.fsck.k9.message.Attachment> result = new LinkedHashMap<>();
+        for (InlineAttachment attachment : inlineAttachments.values()) {
+            result.put(attachment.getContentId(), attachment.getAttachment());
+        }
+        return result;
+    }
+
     public void onClickAddAttachment(RecipientPresenter recipientPresenter) {
         ComposeCryptoStatus currentCachedCryptoStatus = recipientPresenter.getCurrentCachedCryptoStatus();
         if (currentCachedCryptoStatus == null) {
@@ -137,58 +149,81 @@ public class AttachmentPresenter {
         attachmentMvpView.showPickAttachmentDialog(REQUEST_CODE_ATTACHMENT_URI);
     }
 
-    private void addAttachment(Uri uri) {
-        addAttachment(uri, null);
+    private void addExternalAttachment(Uri uri) {
+        addExternalAttachment(uri, null);
     }
 
-    private void addAttachment(AttachmentViewInfo attachmentViewInfo) {
+    private void addInternalAttachment(AttachmentViewInfo attachmentViewInfo) {
         if (attachments.containsKey(attachmentViewInfo.internalUri)) {
             throw new IllegalStateException("Received the same attachmentViewInfo twice!");
         }
 
         int loaderId = getNextFreeLoaderId();
         Attachment attachment = Attachment.createAttachment(
-                attachmentViewInfo.internalUri, loaderId, attachmentViewInfo.mimeType, true);
+                attachmentViewInfo.internalUri, loaderId, attachmentViewInfo.mimeType, true, true);
         attachment = attachment.deriveWithMetadataLoaded(
                 attachmentViewInfo.mimeType, attachmentViewInfo.displayName, attachmentViewInfo.size);
 
         addAttachmentAndStartLoader(attachment);
     }
 
-    public void addAttachment(Uri uri, String contentType) {
-        addAttachment(uri, contentType, false);
+    public void addExternalAttachment(Uri uri, String contentType) {
+        addAttachment(uri, contentType, false, false);
     }
 
-    private void addAttachment(Uri uri, String contentType, boolean allowMessageType) {
+    private void addInlineAttachment(AttachmentViewInfo attachmentViewInfo) {
+        if (inlineAttachments.containsKey(attachmentViewInfo.internalUri)) {
+            throw new IllegalStateException("Received the same attachmentViewInfo twice!");
+        }
+
+        int loaderId = getNextFreeLoaderId();
+        Attachment attachment = Attachment.createAttachment(
+                attachmentViewInfo.internalUri, loaderId, attachmentViewInfo.mimeType, true, true);
+        attachment = attachment.deriveWithMetadataLoaded(
+                attachmentViewInfo.mimeType, attachmentViewInfo.displayName, attachmentViewInfo.size);
+
+        inlineAttachments.put(attachment.uri, new InlineAttachment(attachmentViewInfo.part.getContentId(), attachment));
+
+        Bundle bundle = new Bundle();
+        bundle.putParcelable(LOADER_ARG_ATTACHMENT, attachment.uri);
+        loaderManager.initLoader(attachment.loaderId, bundle, mInlineAttachmentContentLoaderCallback);
+    }
+
+    private void addInternalAttachment(Uri uri, String contentType, boolean allowMessageType) {
+        addAttachment(uri, contentType, allowMessageType, true);
+    }
+
+    private void addAttachment(Uri uri, String contentType, boolean allowMessageType, boolean internalAttachment) {
         if (attachments.containsKey(uri)) {
             return;
         }
 
         int loaderId = getNextFreeLoaderId();
-        Attachment attachment = Attachment.createAttachment(uri, loaderId, contentType, allowMessageType);
+        Attachment attachment = Attachment.createAttachment(uri, loaderId, contentType, allowMessageType, internalAttachment);
 
         addAttachmentAndStartLoader(attachment);
     }
 
-    public boolean loadNonInlineAttachments(MessageViewInfo messageViewInfo) {
+    public boolean loadAllAvailableAttachments(MessageViewInfo messageViewInfo) {
         boolean allPartsAvailable = true;
 
         for (AttachmentViewInfo attachmentViewInfo : messageViewInfo.attachments) {
-            if (attachmentViewInfo.inlineAttachment) {
-                continue;
-            }
-            if (!attachmentViewInfo.isContentAvailable()) {
+            if (attachmentViewInfo.isContentAvailable()) {
+                if (attachmentViewInfo.inlineAttachment) {
+                    addInlineAttachment(attachmentViewInfo);
+                } else {
+                    addInternalAttachment(attachmentViewInfo);
+                }
+            } else {
                 allPartsAvailable = false;
-                continue;
             }
-            addAttachment(attachmentViewInfo);
         }
 
         return allPartsAvailable;
     }
 
     public void processMessageToForward(MessageViewInfo messageViewInfo) {
-        boolean isMissingParts = !loadNonInlineAttachments(messageViewInfo);
+        boolean isMissingParts = !loadAllAvailableAttachments(messageViewInfo);
         if (isMissingParts) {
             attachmentMvpView.showMissingAttachmentsPartialMessageWarning();
         }
@@ -202,7 +237,7 @@ public class AttachmentPresenter {
             MessageReference messageReference = localMessage.makeMessageReference();
             Uri rawMessageUri = RawMessageProvider.getRawMessageUri(messageReference);
 
-            addAttachment(rawMessageUri, "message/rfc822", true);
+            addInternalAttachment(rawMessageUri, "message/rfc822", true);
         }
     }
 
@@ -309,6 +344,35 @@ public class AttachmentPresenter {
                 }
             };
 
+    private LoaderManager.LoaderCallbacks<Attachment> mInlineAttachmentContentLoaderCallback =
+            new LoaderManager.LoaderCallbacks<Attachment>() {
+                @Override
+                public Loader<Attachment> onCreateLoader(int id, Bundle args) {
+                    Uri uri = args.getParcelable(LOADER_ARG_ATTACHMENT);
+                    return new AttachmentContentLoader(context, inlineAttachments.get(uri).getAttachment());
+                }
+
+                @Override
+                public void onLoadFinished(Loader<Attachment> loader, Attachment attachment) {
+                    int loaderId = loader.getId();
+                    loaderManager.destroyLoader(loaderId);
+
+                    if (attachment.state == Attachment.LoadingState.COMPLETE) {
+                        inlineAttachments.put(attachment.uri, new InlineAttachment(
+                                inlineAttachments.get(attachment.uri).getContentId(), attachment));
+                    } else {
+                        inlineAttachments.remove(attachment.uri);
+                    }
+
+                    postPerformStalledAction();
+                }
+
+                @Override
+                public void onLoaderReset(Loader<Attachment> loader) {
+                    // nothing to do
+                }
+            };
+
     private void postPerformStalledAction() {
         new Handler().post(new Runnable() {
             @Override
@@ -343,7 +407,7 @@ public class AttachmentPresenter {
             for (int i = 0, end = clipData.getItemCount(); i < end; i++) {
                 Uri uri = clipData.getItemAt(i).getUri();
                 if (uri != null) {
-                    addAttachment(uri);
+                    addExternalAttachment(uri);
                 }
             }
             return;
@@ -351,7 +415,7 @@ public class AttachmentPresenter {
 
         Uri uri = data.getData();
         if (uri != null) {
-            addAttachment(uri);
+            addExternalAttachment(uri);
         }
     }
 

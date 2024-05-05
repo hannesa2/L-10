@@ -29,10 +29,10 @@ import org.koin.core.parameter.parametersOf
 
 class ManageFoldersFragment : Fragment() {
     private val viewModel: ManageFoldersViewModel by viewModel()
-    private val folderNameFormatter: FolderNameFormatter by inject { parametersOf(requireActivity()) }
+    private val folderNameFormatter: FolderNameFormatter by inject()
     private val messagingController: MessagingController by inject()
     private val preferences: Preferences by inject()
-    private val folderIconProvider by lazy { FolderIconProvider(requireActivity().theme) }
+    private val folderIconProvider: FolderIconProvider by inject { parametersOf(requireActivity().theme) }
 
     private lateinit var account: Account
     private lateinit var itemAdapter: ItemAdapter<FolderListItem>
@@ -144,9 +144,10 @@ class ManageFoldersFragment : Fragment() {
         if (constraint.isNullOrEmpty()) return true
 
         val locale = Locale.getDefault()
-        val displayName = item.displayName.toLowerCase(locale)
+        val displayName = item.displayName.lowercase(locale)
         return constraint.splitToSequence(" ")
-            .map { it.toLowerCase(locale) }
+            .filter { it.isNotEmpty() }
+            .map { it.lowercase(locale) }
             .any { it in displayName }
     }
 

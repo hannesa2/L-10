@@ -115,7 +115,7 @@ public class MessageLoaderHelper {
     public void asyncStartOrResumeLoadingMessage(MessageReference messageReference, Parcelable cachedDecryptionResult) {
         onlyLoadMetadata = false;
         this.messageReference = messageReference;
-        this.account = Preferences.getPreferences(context).getAccount(messageReference.getAccountUuid());
+        this.account = Preferences.getPreferences().getAccount(messageReference.getAccountUuid());
 
         if (cachedDecryptionResult != null) {
             if (cachedDecryptionResult instanceof OpenPgpDecryptionResult) {
@@ -132,7 +132,7 @@ public class MessageLoaderHelper {
     public void asyncStartOrResumeLoadingMessageMetadata(MessageReference messageReference) {
         onlyLoadMetadata = true;
         this.messageReference = messageReference;
-        this.account = Preferences.getPreferences(context).getAccount(messageReference.getAccountUuid());
+        this.account = Preferences.getPreferences().getAccount(messageReference.getAccountUuid());
 
         startOrResumeLocalMessageLoader();
     }
@@ -140,6 +140,12 @@ public class MessageLoaderHelper {
     @UiThread
     public void asyncReloadMessage() {
         startOrResumeLocalMessageLoader();
+    }
+
+    public void resumeCryptoOperationIfNecessary() {
+        if (messageCryptoHelper != null) {
+            messageCryptoHelper.resumeCryptoOperationIfNecessary();
+        }
     }
 
     @UiThread
@@ -351,13 +357,13 @@ public class MessageLoaderHelper {
         }
 
         @Override
-        public void startPendingIntentForCryptoHelper(IntentSender si, int requestCode, Intent fillIntent,
+        public boolean startPendingIntentForCryptoHelper(IntentSender si, int requestCode, Intent fillIntent,
                 int flagsMask, int flagValues, int extraFlags) {
             if (callback == null) {
                 throw new IllegalStateException("unexpected call when callback is already detached");
             }
 
-            callback.startIntentSenderForMessageLoaderHelper(si, requestCode, fillIntent,
+            return callback.startIntentSenderForMessageLoaderHelper(si, requestCode, fillIntent,
                     flagsMask, flagValues, extraFlags);
         }
     };
@@ -518,8 +524,8 @@ public class MessageLoaderHelper {
 
         void setLoadingProgress(int current, int max);
 
-        void startIntentSenderForMessageLoaderHelper(IntentSender si, int requestCode, Intent fillIntent, int flagsMask,
-                int flagValues, int extraFlags);
+        boolean startIntentSenderForMessageLoaderHelper(IntentSender si, int requestCode, Intent fillIntent,
+                int flagsMask, int flagValues, int extraFlags);
 
         void onDownloadErrorMessageNotFound();
         void onDownloadErrorNetworkError();

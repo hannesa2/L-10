@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
-    android:installLocation="auto"
-    package="com.fsck.k9">
+    xmlns:tools="http://schemas.android.com/tools"
+    android:installLocation="auto">
 
     <uses-feature
         android:name="android.hardware.touchscreen"
@@ -22,33 +22,22 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
-
-    <permission
-        android:name="${applicationId}.permission.READ_MESSAGES"
-        android:description="@string/read_messages_desc"
-        android:label="@string/read_messages_label"
-        android:permissionGroup="android.permission-group.MESSAGES"
-        android:protectionLevel="dangerous"/>
-    <uses-permission android:name="${applicationId}.permission.READ_MESSAGES"/>
-
-    <permission
-        android:name="${applicationId}.permission.DELETE_MESSAGES"
-        android:description="@string/delete_messages_desc"
-        android:label="@string/delete_messages_label"
-        android:permissionGroup="android.permission-group.MESSAGES"
-        android:protectionLevel="dangerous"/>
-    <uses-permission android:name="${applicationId}.permission.DELETE_MESSAGES"/>
-
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
 
     <application
         android:name="com.fsck.k9.App"
         android:allowTaskReparenting="false"
         android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/Theme.K9.Startup"
         android:resizeableActivity="true"
-        android:allowBackup="false">
+        android:allowBackup="false"
+        android:supportsRtl="true"
+        tools:replace="android:theme"
+        tools:ignore="UnusedAttribute">
 
         <meta-data
             android:name="android.app.default_searchable"
@@ -69,13 +58,6 @@
             android:value="true"/>
         <meta-data android:name="android.webkit.WebView.MetricsOptOut"
             android:value="true" />
-
-        <!-- activity-alias so old launcher shortcuts work -->
-        <!-- TODO: Remove after 2020-12-31 -->
-        <activity-alias
-            android:name=".activity.Accounts"
-            android:targetActivity=".activity.MessageList"
-            android:exported="true" />
 
         <activity
             android:name=".ui.onboarding.OnboardingActivity"
@@ -169,14 +151,10 @@
             android:label="@string/ac_transfer_title"
             />
 
-        <!-- activity-alias so old launcher shortcuts work -->
-        <!-- TODO: Remove after 2020-12-31 -->
-        <activity-alias
-            android:name=".activity.FolderList"
-            android:targetActivity=".activity.MessageList"
-            android:exported="true" />
-
-        <activity android:name=".activity.MessageList">
+        <activity
+            android:name=".activity.MessageList"
+            android:launchMode="singleTop"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
 
@@ -197,11 +175,14 @@
             </intent-filter>
         </activity>
 
+        <!--
+        This component is disabled by default. It will be enabled programmatically after an account has been set up.
+        -->
         <activity
             android:name=".activity.MessageCompose"
             android:configChanges="locale"
             android:enabled="false"
-            android:label="@string/app_name">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.SENDTO"/>
                 <data android:scheme="mailto"/>
@@ -228,10 +209,6 @@
                 <action android:name="org.autocrypt.PEER_ACTION"/>
                 <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
-
-            <meta-data
-                android:name="android.service.chooser.chooser_target_service"
-                android:value="com.fsck.k9.directshare.K9ChooserTargetService" />
         </activity>
 
         <!-- Search Activity - searchable -->
@@ -239,7 +216,8 @@
             android:name=".activity.Search"
             android:configChanges="locale"
             android:label="@string/search_action"
-            android:uiOptions="splitActionBarWhenNarrow">
+            android:uiOptions="splitActionBarWhenNarrow"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.SEARCH"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -249,17 +227,24 @@
                 android:resource="@xml/searchable"/>
         </activity>
 
+        <!--
+        This component is disabled by default. It will be enabled programmatically after an account has been set up.
+        -->
         <activity
             android:name=".activity.LauncherShortcuts"
             android:configChanges="locale"
-            android:label="@string/shortcuts_title">
+            android:label="@string/shortcuts_title"
+            android:enabled="false"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.CREATE_SHORTCUT"/>
                 <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
         </activity>
 
-        <activity android:name=".widget.unread.UnreadWidgetConfigurationActivity">
+        <activity
+            android:name=".widget.unread.UnreadWidgetConfigurationActivity"
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE"/>
             </intent-filter>
@@ -289,34 +274,33 @@
             android:name=".ui.messagesource.MessageSourceActivity"
             android:label="@string/show_headers_action" />
 
-        <receiver
-            android:name=".service.StorageReceiver"
-            android:enabled="true">
+        <activity
+            android:name=".ui.changelog.RecentChangesActivity"
+            android:label="@string/changelog_recent_changes_title" />
+
+        <activity
+            android:name=".ui.push.PushInfoActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:label="@string/push_info_title"
+            android:taskAffinity="${applicationId}.push_info">
             <intent-filter>
-                <!--
-                android.intent.action.MEDIA_MOUNTED
-
-                     * Broadcast Action:  External media is present and mounted at its mount point.
-                     * The path to the mount point for the removed media is contained in the Intent.mData field.
-                     * The Intent contains an extra with name "read-only" and Boolean value to indicate if the
-                     * media was mounted read only.
-
-                 -->
-                <action android:name="android.intent.action.MEDIA_MOUNTED"/>
-                <!--
-
-                MEDIA_EJECT and MEDIA_UNMOUNTED are not defined here: they have to be dynamically registered
-                otherwise it would make K-9 start at the wrong time
-
-                 -->
-                <data android:scheme="file"/>
+                <action android:name="app.k9mail.action.PUSH_INFO" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-        </receiver>
+        </activity>
 
+        <activity
+            android:name=".activity.setup.OAuthFlowActivity"
+            android:label="@string/account_setup_basics_title" />
+
+        <!-- This component is disabled by default (if possible). It will be enabled programmatically if necessary. -->
         <receiver
             android:name=".provider.UnreadWidgetProvider"
             android:icon="@drawable/ic_launcher"
-            android:label="@string/unread_widget_label">
+            android:label="@string/unread_widget_label"
+            android:enabled="@bool/home_screen_widgets_enabled"
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
             </intent-filter>
@@ -325,10 +309,13 @@
                 android:resource="@xml/unread_widget_info"/>
         </receiver>
 
+        <!-- This component is disabled by default (if possible). It will be enabled programmatically if necessary. -->
         <receiver
             android:name=".widget.list.MessageListWidgetProvider"
             android:icon="@drawable/message_list_widget_preview"
-            android:label="@string/mail_list_widget_text">
+            android:label="@string/mail_list_widget_text"
+            android:enabled="@bool/home_screen_widgets_enabled"
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -337,31 +324,31 @@
                 android:resource="@xml/message_list_widget_info" />
         </receiver>
 
-        <service
-            android:name=".widget.list.MessageListWidgetService"
-            android:enabled="true"
-            android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <!-- This component is disabled by default. It will be enabled programmatically if necessary. -->
+        <receiver
+            android:name=".controller.push.BootCompleteReceiver"
+            android:exported="false"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+            </intent-filter>
+        </receiver>
 
         <service
-            android:name=".notification.NotificationActionService"
-            android:enabled="true"/>
+            android:name=".notification.NotificationActionService"/>
 
         <service
             android:name=".service.DatabaseUpgradeService"
             android:exported="false"/>
 
-
-        <service
-            android:name="com.fsck.k9.directshare.K9ChooserTargetService"
-            android:permission="android.permission.BIND_CHOOSER_TARGET_SERVICE" >
-            <intent-filter>
-                <action android:name="android.service.chooser.ChooserTargetService" />
-            </intent-filter>
-        </service>
-
         <service
             android:name="com.fsck.k9.account.AccountRemoverService"
             android:permission="android.permission.BIND_JOB_SERVICE"/>
+
+        <service
+            android:name=".controller.push.PushService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <provider
             android:name=".provider.AttachmentProvider"
@@ -387,20 +374,6 @@
         </provider>
 
         <provider
-            android:name=".external.MessageProvider"
-            android:authorities="${applicationId}.messageprovider"
-            android:exported="true"
-            android:grantUriPermissions="true"
-            android:multiprocess="true"
-            android:readPermission="${applicationId}.permission.READ_MESSAGES"
-            android:writePermission="${applicationId}.permission.DELETE_MESSAGES"/>
-
-        <provider
-            android:name=".provider.EmailProvider"
-            android:authorities="${applicationId}.provider.email"
-            android:exported="false"/>
-
-        <provider
             android:name=".provider.DecryptedFileProvider"
             android:authorities="${applicationId}.decryptedfileprovider"
             android:exported="false"
@@ -420,6 +393,35 @@
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/temp_file_provider_paths" />
+        </provider>
+
+        <activity
+            android:name="net.openid.appauth.RedirectUriReceiverActivity"
+            android:exported="true"
+            tools:node="merge">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <!-- Microsoft uses a special redirect URI format for Android apps -->
+                <data android:scheme="msauth" android:host="${applicationId}"/>
+            </intent-filter>
+        </activity>
+
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+
+            <!-- We're using on-demand initialization for WorkManager -->
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+
         </provider>
 
     </application>

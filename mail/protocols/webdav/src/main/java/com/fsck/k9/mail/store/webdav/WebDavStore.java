@@ -11,11 +11,13 @@ import java.net.URISyntaxException;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import com.fsck.k9.logging.Timber;
 import com.fsck.k9.mail.CertificateValidationException;
 import com.fsck.k9.mail.ConnectionSecurity;
 import com.fsck.k9.mail.FolderType;
@@ -46,7 +48,6 @@ import org.apache.http.protocol.HttpContext;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.XMLReader;
-import timber.log.Timber;
 
 import static com.fsck.k9.mail.K9MailLib.DEBUG_PROTOCOL_WEBDAV;
 import static com.fsck.k9.mail.helper.UrlEncodingHelper.decodeUtf8;
@@ -73,6 +74,7 @@ public class WebDavStore {
     private String mailboxPath;
 
     private final TrustManagerFactory trustManagerFactory;
+    private final SniHostSetter sniHostSetter;
     private final WebDavHttpClient.WebDavHttpClientFactory httpClientFactory;
     private WebDavHttpClient httpClient = null;
     private HttpContext httpContext = null;
@@ -84,16 +86,19 @@ public class WebDavStore {
     private WebDavFolder sendFolder = null;
     private Map<String, WebDavFolder> folderList = new HashMap<>();
 
-    public WebDavStore(TrustManagerFactory trustManagerFactory, ServerSettings serverSettings,
-            DraftsFolderProvider draftsFolderProvider) {
-        this(trustManagerFactory, serverSettings, draftsFolderProvider, new WebDavHttpClient.WebDavHttpClientFactory());
+    public WebDavStore(TrustManagerFactory trustManagerFactory, SniHostSetter sniHostSetter,
+            ServerSettings serverSettings, DraftsFolderProvider draftsFolderProvider) {
+        this(trustManagerFactory, sniHostSetter, serverSettings, draftsFolderProvider,
+                new WebDavHttpClient.WebDavHttpClientFactory());
     }
 
-    public WebDavStore(TrustManagerFactory trustManagerFactory, ServerSettings serverSettings,
-            DraftsFolderProvider draftsFolderProvider, WebDavHttpClientFactory clientFactory) {
+    public WebDavStore(TrustManagerFactory trustManagerFactory, SniHostSetter sniHostSetter,
+            ServerSettings serverSettings, DraftsFolderProvider draftsFolderProvider,
+            WebDavHttpClientFactory clientFactory) {
         this.draftsFolderProvider = draftsFolderProvider;
         httpClientFactory = clientFactory;
         this.trustManagerFactory = trustManagerFactory;
+        this.sniHostSetter = sniHostSetter;
 
         hostname = serverSettings.host;
         port = serverSettings.port;
@@ -765,7 +770,9 @@ public class WebDavStore {
 
             SchemeRegistry reg = httpClient.getConnectionManager().getSchemeRegistry();
             try {
-                Scheme s = new Scheme("https", new WebDavSocketFactory(trustManagerFactory, hostname, 443), 443);
+                WebDavSocketFactory socketFactory =
+                        new WebDavSocketFactory(trustManagerFactory, sniHostSetter, hostname, 443);
+                Scheme s = new Scheme("https", socketFactory, 443);
                 reg.register(s);
             } catch (NoSuchAlgorithmException nsa) {
                 Timber.e(nsa, "NoSuchAlgorithmException in getHttpClient");
@@ -931,7 +938,8 @@ public class WebDavStore {
         return dataset;
     }
 
-    public void sendMessages(List<Message> messages) throws MessagingException {
+    public void sendMessage(Message message) throws MessagingException {
+        List<Message> messages = Collections.singletonList(message);
         WebDavFolder tmpFolder = getFolder(draftsFolderProvider.getDraftsFolder());
         try {
             tmpFolder.open();

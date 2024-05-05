@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 The K-9 Dog Walkers
+ * Copyright (C) 2012 The L-10 Dog Walkers
  * Copyright (C) 2011 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,8 +22,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import com.fsck.k9.logging.Timber;
 import com.fsck.k9.mail.Flag;
-import timber.log.Timber;
 
 
 /**

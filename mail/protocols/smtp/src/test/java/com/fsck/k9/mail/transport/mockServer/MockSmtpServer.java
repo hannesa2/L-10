@@ -21,8 +21,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
 
-import android.annotation.SuppressLint;
-
 import com.fsck.k9.mail.helpers.KeyStoreProvider;
 import com.jcraft.jzlib.JZlib;
 import com.jcraft.jzlib.ZOutputStream;
@@ -36,7 +34,6 @@ import okio.Okio;
 import org.apache.commons.io.IOUtils;
 
 
-@SuppressLint("NewApi")
 public class MockSmtpServer {
     private static final byte[] CRLF = { '\r', '\n' };
 
@@ -69,6 +66,11 @@ public class MockSmtpServer {
     public void expect(String command) {
         checkServerNotRunning();
         interactions.add(new ExpectedCommand(command));
+    }
+
+    public void startTls() {
+        checkServerNotRunning();
+        interactions.add(new UpgradeToTls());
     }
 
     public void closeConnection() {
@@ -215,6 +217,9 @@ public class MockSmtpServer {
         }
     }
 
+    private static class UpgradeToTls implements SmtpInteraction {
+    }
+
     private static class CloseConnection implements SmtpInteraction {
     }
 
@@ -306,6 +311,8 @@ public class MockSmtpServer {
                 readExpectedCommand((ExpectedCommand) interaction);
             } else if (interaction instanceof CannedResponse) {
                 writeCannedResponse((CannedResponse) interaction);
+            } else if (interaction instanceof UpgradeToTls) {
+                upgradeToTls(socket);
             } else if (interaction instanceof CloseConnection) {
                 clientSocket.close();
             }

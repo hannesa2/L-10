@@ -5,6 +5,7 @@ import com.fsck.k9.mail.Flag
 import com.fsck.k9.mail.FolderClass
 import com.fsck.k9.mail.FolderType
 import com.fsck.k9.mail.Header
+import com.fsck.k9.search.ConditionsTreeNode
 import java.util.Date
 
 /**
@@ -79,9 +80,19 @@ interface MessageStore {
     fun setMessageFlag(folderId: Long, messageServerId: String, flag: Flag, set: Boolean)
 
     /**
+     * Set whether a message should be considered as new.
+     */
+    fun setNewMessageState(folderId: Long, messageServerId: String, newMessage: Boolean)
+
+    /**
+     * Clear the new message state for all messages.
+     */
+    fun clearNewMessageState()
+
+    /**
      * Retrieve the server ID for a given message.
      */
-    fun getMessageServerId(messageId: Long): String
+    fun getMessageServerId(messageId: Long): String?
 
     /**
      * Retrieve the server IDs for the given messages.
@@ -111,6 +122,31 @@ interface MessageStore {
     fun getAllMessagesAndEffectiveDates(folderId: Long): Map<String, Long?>
 
     /**
+     * Retrieve list of messages.
+     */
+    fun <T> getMessages(
+        selection: String,
+        selectionArgs: Array<String>,
+        sortOrder: String,
+        messageMapper: MessageMapper<out T?>
+    ): List<T>
+
+    /**
+     * Retrieve threaded list of messages.
+     */
+    fun <T> getThreadedMessages(
+        selection: String,
+        selectionArgs: Array<String>,
+        sortOrder: String,
+        messageMapper: MessageMapper<out T?>
+    ): List<T>
+
+    /**
+     * Retrieve list of messages in a thread.
+     */
+    fun <T> getThread(threadId: Long, sortOrder: String, messageMapper: MessageMapper<out T?>): List<T>
+
+    /**
      * Retrieve the date of the oldest message in the given folder.
      */
     fun getOldestMessageDate(folderId: Long): Date?
@@ -121,9 +157,14 @@ interface MessageStore {
     fun getHeaders(folderId: Long, messageServerId: String): List<Header>
 
     /**
-     * Get highest UID (message server ID)
+     * Retrieve selected header fields of a message.
      */
-    fun getLastUid(folderId: Long): Long?
+    fun getHeaders(folderId: Long, messageServerId: String, headerNames: Set<String>): List<Header>
+
+    /**
+     * Return the size of this message store in bytes.
+     */
+    fun getSize(): Long
 
     /**
      * Remove messages from the store.
@@ -167,9 +208,39 @@ interface MessageStore {
     fun <T> getDisplayFolders(displayMode: FolderMode, outboxFolderId: Long?, mapper: FolderMapper<T>): List<T>
 
     /**
+     * Check if all given folders are included in the Unified Inbox.
+     */
+    fun areAllIncludedInUnifiedInbox(folderIds: Collection<Long>): Boolean
+
+    /**
      * Find a folder with the given server ID and return its store ID.
      */
     fun getFolderId(folderServerId: String): Long?
+
+    /**
+     * Find a folder with the given store ID and return its server ID.
+     */
+    fun getFolderServerId(folderId: Long): String?
+
+    /**
+     * Retrieve the number of messages in a folder.
+     */
+    fun getMessageCount(folderId: Long): Int
+
+    /**
+     * Retrieve the number of unread messages in a folder.
+     */
+    fun getUnreadMessageCount(folderId: Long): Int
+
+    /**
+     * Retrieve the number of unread messages matching [conditions].
+     */
+    fun getUnreadMessageCount(conditions: ConditionsTreeNode): Int
+
+    /**
+     * Retrieve the number of starred messages matching [conditions].
+     */
+    fun getStarredMessageCount(conditions: ConditionsTreeNode): Int
 
     /**
      * Update a folder's name and type.
@@ -197,9 +268,19 @@ interface MessageStore {
     fun setSyncClass(folderId: Long, folderClass: FolderClass)
 
     /**
+     * Update the push class of a folder.
+     */
+    fun setPushClass(folderId: Long, folderClass: FolderClass)
+
+    /**
      * Update the notification class of a folder.
      */
     fun setNotificationClass(folderId: Long, folderClass: FolderClass)
+
+    /**
+     * Get the 'more messages' state of a folder.
+     */
+    fun hasMoreMessages(folderId: Long): MoreMessages?
 
     /**
      * Update the 'more messages' state of a folder.
@@ -207,14 +288,19 @@ interface MessageStore {
     fun setMoreMessages(folderId: Long, moreMessages: MoreMessages)
 
     /**
-     * Update the 'last updated' state of a folder.
+     * Update the time when the folder was last checked for new messages.
      */
-    fun setLastUpdated(folderId: Long, timestamp: Long)
+    fun setLastChecked(folderId: Long, timestamp: Long)
 
     /**
      * Update folder status message.
      */
     fun setStatus(folderId: Long, status: String?)
+
+    /**
+     * Update a folder's "visible limit" value.
+     */
+    fun setVisibleLimit(folderId: Long, visibleLimit: Int)
 
     /**
      * Delete folders.
@@ -262,4 +348,9 @@ interface MessageStore {
      * Create or update a number property associated with the given folder.
      */
     fun setFolderExtraNumber(folderId: Long, name: String, value: Long)
+
+    /**
+     * Optimize the message store with the goal of using the minimal amount of disk space.
+     */
+    fun compact()
 }

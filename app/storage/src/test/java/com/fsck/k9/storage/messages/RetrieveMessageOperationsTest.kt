@@ -2,7 +2,6 @@ package com.fsck.k9.storage.messages
 
 import com.fsck.k9.mail.Flag
 import com.fsck.k9.mail.Header
-import com.fsck.k9.mail.MessagingException
 import com.fsck.k9.mail.crlf
 import com.fsck.k9.storage.RobolectricTest
 import com.google.common.truth.Truth.assertThat
@@ -14,9 +13,11 @@ class RetrieveMessageOperationsTest : RobolectricTest() {
     private val lockableDatabase = createLockableDatabaseMock(sqliteDatabase)
     private val retrieveMessageOperations = RetrieveMessageOperations(lockableDatabase)
 
-    @Test(expected = MessagingException::class)
+    @Test
     fun `get message server id of non-existent message`() {
-        retrieveMessageOperations.getMessageServerId(42)
+        val messageServerId = retrieveMessageOperations.getMessageServerId(42)
+
+        assertThat(messageServerId).isNull()
     }
 
     @Test
@@ -170,24 +171,31 @@ class RetrieveMessageOperationsTest : RobolectricTest() {
     }
 
     @Test
-    fun `get highest message uid`() {
-        val folderId = sqliteDatabase.createFolder()
-        sqliteDatabase.createMessage(uid = "42", folderId = folderId)
-        sqliteDatabase.createMessage(uid = "23", folderId = folderId)
-        sqliteDatabase.createMessage(uid = "27", folderId = folderId)
+    fun `get some headers`() {
+        val messagePartId = sqliteDatabase.createMessagePart(
+            header = """
+                From: <alice@domain.example>
+                To: Bob <bob@domain.example>
+                Date: Thu, 01 Apr 2021 01:23:45 +0200
+                Subject: Test
+                Message-Id: <20210401012345.123456789A@domain.example>
+            """.trimIndent().crlf()
+        )
+        sqliteDatabase.createMessage(folderId = 1, uid = "uid1", messagePartId = messagePartId)
 
-        val highestUid = retrieveMessageOperations.getLastUid(folderId)
+        val headers = retrieveMessageOperations.getHeaders(
+            folderId = 1,
+            messageServerId = "uid1",
+            headerNames = setOf("from", "to", "message-id")
+        )
 
-        assertThat(highestUid).isEqualTo(42)
-    }
-
-    @Test
-    fun `get highest message uid should return null if there are no messages`() {
-        val folderId = sqliteDatabase.createFolder()
-
-        val highestUid = retrieveMessageOperations.getLastUid(folderId)
-
-        assertThat(highestUid).isNull()
+        assertThat(headers).isEqualTo(
+            listOf(
+                Header("From", "<alice@domain.example>"),
+                Header("To", "Bob <bob@domain.example>"),
+                Header("Message-Id", "<20210401012345.123456789A@domain.example>")
+            )
+        )
     }
 
     @Test

@@ -1,6 +1,8 @@
 package com.fsck.k9.backend.jmap
 
 import com.fsck.k9.backend.api.Backend
+import com.fsck.k9.backend.api.BackendPusher
+import com.fsck.k9.backend.api.BackendPusherCallback
 import com.fsck.k9.backend.api.BackendStorage
 import com.fsck.k9.backend.api.SyncConfig
 import com.fsck.k9.backend.api.SyncListener
@@ -37,14 +39,13 @@ class JmapBackend(
     override val supportsTrashFolder = true
     override val supportsSearchByDate = true
     override val isPushCapable = false // FIXME
-    override val isDeleteMoveToTrash = true
 
     override fun refreshFolderList() {
         commandRefreshFolderList.refreshFolderList()
     }
 
-    override fun sync(folder: String, syncConfig: SyncConfig, listener: SyncListener) {
-        commandSync.sync(folder, syncConfig, listener)
+    override fun sync(folderServerId: String, syncConfig: SyncConfig, listener: SyncListener) {
+        commandSync.sync(folderServerId, syncConfig, listener)
     }
 
     override fun downloadMessage(syncConfig: SyncConfig, folderServerId: String, messageServerId: String) {
@@ -138,6 +139,10 @@ class JmapBackend(
 
     override fun checkOutgoingServerSettings() {
         checkIncomingServerSettings()
+    }
+
+    override fun createPusher(callback: BackendPusherCallback): BackendPusher {
+        throw UnsupportedOperationException("not implemented")
     }
 
     private fun JmapConfig.toHttpAuthentication(): HttpAuthentication {

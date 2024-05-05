@@ -47,6 +47,6 @@ object HtmlConverter {
      */
     @JvmStatic
     fun textToHtmlFragment(text: String): String {
-        return TextToHtml.toHtmlFragment(text)
+        return TextToHtml.toHtmlFragment(text, retainOriginalWhitespace = false)
     }
 }

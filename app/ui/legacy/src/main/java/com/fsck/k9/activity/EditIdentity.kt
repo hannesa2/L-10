@@ -30,11 +30,12 @@ class EditIdentity : K9Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setLayout(R.layout.edit_identity)
+        setTitle(R.string.edit_identity_title)
         supportActionBar!!.setDisplayHomeAsUpEnabled(true)
 
         identityIndex = intent.getIntExtra(EXTRA_IDENTITY_INDEX, -1)
         val accountUuid = intent.getStringExtra(EXTRA_ACCOUNT) ?: error("Missing account UUID")
-        account = Preferences.getPreferences(this).getAccount(accountUuid) ?: error("Couldn't find account")
+        account = Preferences.getPreferences().getAccount(accountUuid) ?: error("Couldn't find account")
 
         identity = when {
             savedInstanceState != null -> savedInstanceState.getParcelable(EXTRA_IDENTITY) ?: error("Missing state")
@@ -90,7 +91,7 @@ class EditIdentity : K9Activity() {
             identities.add(identityIndex, identity)
         }
 
-        Preferences.getPreferences(applicationContext).saveAccount(account)
+        Preferences.getPreferences().saveAccount(account)
 
         finish()
     }
@@ -100,7 +101,7 @@ class EditIdentity : K9Activity() {
         outState.putParcelable(EXTRA_IDENTITY, identity)
     }
 
-    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.edit_identity_menu, menu)
         return true
     }

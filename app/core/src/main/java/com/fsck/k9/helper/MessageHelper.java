@@ -1,6 +1,9 @@
 package com.fsck.k9.helper;
 
 
+import java.util.List;
+import java.util.regex.Pattern;
+
 import android.content.Context;
 import android.text.Spannable;
 import android.text.SpannableString;
@@ -27,6 +30,7 @@ public class MessageHelper {
      * @see #toFriendly(Address[], com.fsck.k9.helper.Contacts)
      */
     private static final int TOO_MANY_ADDRESSES = 50;
+    private static final Pattern SPOOF_ADDRESS_PATTERN = Pattern.compile("[^(]@");
 
     private static MessageHelper sInstance;
 
@@ -65,7 +69,7 @@ public class MessageHelper {
         return new SpannableStringBuilder(resourceProvider.contactDisplayNamePrefix()).append(recipients);
     }
 
-    public boolean toMe(Account account, Address[] toAddrs) {
+    public boolean toMe(Account account, List<Address> toAddrs) {
         for (Address address : toAddrs) {
             if (account.isAnIdentity(address)) {
                 return true;
@@ -143,6 +147,6 @@ public class MessageHelper {
     }
 
     private static boolean isSpoofAddress(String displayName) {
-        return displayName.contains("@");
+        return displayName.contains("@") && SPOOF_ADDRESS_PATTERN.matcher(displayName).find();
     }
 }

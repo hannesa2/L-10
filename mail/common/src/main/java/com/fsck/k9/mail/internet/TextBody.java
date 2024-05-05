@@ -7,8 +7,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-import androidx.annotation.Nullable;
-
 import com.fsck.k9.mail.Body;
 import com.fsck.k9.mail.MessagingException;
 import com.fsck.k9.mail.filter.CountingOutputStream;
@@ -17,6 +15,7 @@ import com.fsck.k9.mail.filter.SignSafeOutputStream;
 import org.apache.james.mime4j.Charsets;
 import org.apache.james.mime4j.codec.QuotedPrintableOutputStream;
 import org.apache.james.mime4j.util.MimeUtil;
+import org.jetbrains.annotations.Nullable;
 
 
 public class TextBody implements Body, SizeAware {
@@ -113,23 +112,18 @@ public class TextBody implements Body, SizeAware {
     }
 
     private long getLengthWhenQuotedPrintableEncoded(byte[] bytes) throws IOException {
-        CountingOutputStream countingOutputStream = new CountingOutputStream();
-        writeSignSafeQuotedPrintable(countingOutputStream, bytes);
-        return countingOutputStream.getCount();
+        try (CountingOutputStream countingOutputStream = new CountingOutputStream()) {
+            writeSignSafeQuotedPrintable(countingOutputStream, bytes);
+            return countingOutputStream.getCount();
+        }
     }
 
     private void writeSignSafeQuotedPrintable(OutputStream out, byte[] bytes) throws IOException {
-        SignSafeOutputStream signSafeOutputStream = new SignSafeOutputStream(out);
-        try {
-            QuotedPrintableOutputStream signSafeQuotedPrintableOutputStream =
-                    new QuotedPrintableOutputStream(signSafeOutputStream, false);
-            try {
+        try (SignSafeOutputStream signSafeOutputStream = new SignSafeOutputStream(out)) {
+            try (QuotedPrintableOutputStream signSafeQuotedPrintableOutputStream = new QuotedPrintableOutputStream(
+                    signSafeOutputStream, false)) {
                 signSafeQuotedPrintableOutputStream.write(bytes);
-            } finally {
-                signSafeQuotedPrintableOutputStream.close();
             }
-        } finally {
-            signSafeOutputStream.close();
         }
     }
 

@@ -1,11 +1,10 @@
 package com.fsck.k9
 
+import com.fsck.k9.notification.PushNotificationState
+
 interface CoreResourceProvider {
     fun defaultSignature(): String
     fun defaultIdentityDescription(): String
-
-    fun internalStorageProviderName(): String
-    fun externalStorageProviderName(): String
 
     fun contactDisplayNamePrefix(): String
     fun contactUnknownSender(): String
@@ -25,10 +24,12 @@ interface CoreResourceProvider {
     fun replyHeader(sender: String): String
     fun replyHeader(sender: String, sentDate: String): String
 
-    fun searchAllMessagesTitle(): String
-    fun searchAllMessagesDetail(): String
     fun searchUnifiedInboxTitle(): String
     fun searchUnifiedInboxDetail(): String
 
     fun outboxFolderName(): String
+
+    val iconPushNotification: Int
+    fun pushNotificationText(notificationState: PushNotificationState): String
+    fun pushNotificationInfoText(): String
 }

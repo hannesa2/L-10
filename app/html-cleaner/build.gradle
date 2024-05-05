@@ -1,0 +1,12 @@
+plugins {
+    id 'java-library'
+    id 'kotlin'
+    alias(libs.plugins.android.lint)
+}
+
+dependencies {
+    implementation libs.jsoup
+
+    testImplementation libs.junit
+    testImplementation libs.truth
+}

@@ -2,7 +2,7 @@ package com.fsck.k9.preferences
 
 import com.fsck.k9.K9RobolectricTest
 import com.fsck.k9.Preferences
-import com.fsck.k9.mailstore.FolderRepositoryManager
+import com.fsck.k9.mailstore.FolderRepository
 import java.io.ByteArrayOutputStream
 import org.jdom2.Document
 import org.jdom2.input.SAXBuilder
@@ -11,18 +11,20 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 import org.koin.core.component.inject
+import org.mockito.kotlin.mock
 import org.robolectric.RuntimeEnvironment
 
 class SettingsExporterTest : K9RobolectricTest() {
-    private val contentResolver = RuntimeEnvironment.application.contentResolver
+    private val contentResolver = RuntimeEnvironment.getApplication().contentResolver
     private val preferences: Preferences by inject()
     private val folderSettingsProvider: FolderSettingsProvider by inject()
-    private val folderRepositoryManager: FolderRepositoryManager by inject()
+    private val folderRepository: FolderRepository by inject()
     private val settingsExporter = SettingsExporter(
         contentResolver,
         preferences,
         folderSettingsProvider,
-        folderRepositoryManager
+        folderRepository,
+        notificationSettingsUpdater = mock()
     )
 
     @Test
@@ -62,7 +64,7 @@ class SettingsExporterTest : K9RobolectricTest() {
 
     private fun exportPreferences(globalSettings: Boolean, accounts: Set<String>): Document {
         return ByteArrayOutputStream().use { outputStream ->
-            settingsExporter.exportPreferences(outputStream, globalSettings, accounts)
+            settingsExporter.exportPreferences(outputStream, globalSettings, accounts, false)
             parseXml(outputStream.toByteArray())
         }
     }

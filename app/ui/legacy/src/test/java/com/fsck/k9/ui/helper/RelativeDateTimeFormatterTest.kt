@@ -1,8 +1,8 @@
 package com.fsck.k9.ui.helper
 
 import android.os.SystemClock
-import com.fsck.k9.Clock
 import com.fsck.k9.RobolectricTest
+import com.fsck.k9.TestClock
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -10,16 +10,14 @@ import java.util.TimeZone
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
-import org.mockito.Mockito
-import org.mockito.kotlin.whenever
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 @Config(qualifiers = "en")
 class RelativeDateTimeFormatterTest : RobolectricTest() {
 
-    private val context = RuntimeEnvironment.application.applicationContext
-    private val clock = Mockito.mock(Clock::class.java)
+    private val context = RuntimeEnvironment.getApplication().applicationContext
+    private val clock = TestClock()
     private val dateTimeFormatter = RelativeDateTimeFormatter(context, clock)
 
     private val zoneId = "Europe/Berlin"
@@ -123,7 +121,7 @@ class RelativeDateTimeFormatterTest : RobolectricTest() {
         val dateTime = LocalDateTime.parse(time)
         val timeInMillis = dateTime.toEpochMillis()
         SystemClock.setCurrentTimeMillis(timeInMillis) // Is handled by ShadowSystemClock
-        whenever(clock.time).thenReturn(timeInMillis)
+        clock.time = timeInMillis
     }
 
     private fun String.toEpochMillis() = LocalDateTime.parse(this).toEpochMillis()

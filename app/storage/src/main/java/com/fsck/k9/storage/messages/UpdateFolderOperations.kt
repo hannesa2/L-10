@@ -53,6 +53,10 @@ internal class UpdateFolderOperations(private val lockableDatabase: LockableData
         setString(folderId = folderId, columnName = "poll_class", value = folderClass.name)
     }
 
+    fun setPushClass(folderId: Long, folderClass: FolderClass) {
+        setString(folderId = folderId, columnName = "push_class", value = folderClass.name)
+    }
+
     fun setNotificationClass(folderId: Long, folderClass: FolderClass) {
         setString(folderId = folderId, columnName = "notify_class", value = folderClass.name)
     }
@@ -61,7 +65,7 @@ internal class UpdateFolderOperations(private val lockableDatabase: LockableData
         setString(folderId = folderId, columnName = "more_messages", value = moreMessages.databaseName)
     }
 
-    fun setLastUpdated(folderId: Long, timestamp: Long) {
+    fun setLastChecked(folderId: Long, timestamp: Long) {
         lockableDatabase.execute(false) { db ->
             val contentValues = ContentValues().apply {
                 put("last_updated", timestamp)
@@ -73,6 +77,16 @@ internal class UpdateFolderOperations(private val lockableDatabase: LockableData
 
     fun setStatus(folderId: Long, status: String?) {
         setString(folderId = folderId, columnName = "status", value = status)
+    }
+
+    fun setVisibleLimit(folderId: Long, visibleLimit: Int) {
+        lockableDatabase.execute(false) { db ->
+            val contentValues = ContentValues().apply {
+                put("visible_limit", visibleLimit)
+            }
+
+            db.update("folders", contentValues, "id = ?", arrayOf(folderId.toString()))
+        }
     }
 
     private fun setString(folderId: Long, columnName: String, value: String?) {

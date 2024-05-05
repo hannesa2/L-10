@@ -18,6 +18,7 @@ import android.text.TextUtils;
 import androidx.annotation.VisibleForTesting;
 import com.fsck.k9.Account;
 import com.fsck.k9.AccountPreferenceSerializer;
+import com.fsck.k9.Clock;
 import com.fsck.k9.Core;
 import com.fsck.k9.DI;
 import com.fsck.k9.Identity;
@@ -29,9 +30,22 @@ import com.fsck.k9.mail.ConnectionSecurity;
 import com.fsck.k9.mail.ServerSettings;
 import com.fsck.k9.mailstore.SpecialLocalFoldersCreator;
 import com.fsck.k9.preferences.Settings.InvalidSettingValueException;
+
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
 import org.xmlpull.v1.XmlPullParserFactory;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
 import timber.log.Timber;
 
 import static java.util.Collections.emptyMap;
@@ -76,17 +90,19 @@ public class SettingsImporter {
         public final AccountDescription original;
         public final AccountDescription imported;
         public final boolean overwritten;
+        public final boolean authorizationNeeded;
         public final boolean incomingPasswordNeeded;
         public final boolean outgoingPasswordNeeded;
         public final String incomingServerName;
         public final String outgoingServerName;
 
         private AccountDescriptionPair(AccountDescription original, AccountDescription imported,
-                boolean overwritten, boolean incomingPasswordNeeded, boolean outgoingPasswordNeeded,
-                String incomingServerName, String outgoingServerName) {
+                                       boolean overwritten, boolean authorizationNeeded, boolean incomingPasswordNeeded, boolean outgoingPasswordNeeded,
+                                       String incomingServerName, String outgoingServerName) {
             this.original = original;
             this.imported = imported;
             this.overwritten = overwritten;
+            this.authorizationNeeded = authorizationNeeded;
             this.incomingPasswordNeeded = incomingPasswordNeeded;
             this.outgoingPasswordNeeded = outgoingPasswordNeeded;
             this.incomingServerName = incomingServerName;
@@ -100,7 +116,7 @@ public class SettingsImporter {
         public final List<AccountDescription> erroneousAccounts;
 
         private ImportResults(boolean globalSettings, List<AccountDescriptionPair> importedAccounts,
-                List<AccountDescription> erroneousAccounts) {
+                              List<AccountDescription> erroneousAccounts) {
             this.globalSettings = globalSettings;
             this.importedAccounts = importedAccounts;
             this.erroneousAccounts = erroneousAccounts;
@@ -112,14 +128,10 @@ public class SettingsImporter {
      * settings and/or account settings. For all account configurations found, the name of the
      * account along with the account UUID is returned.
      *
-     * @param inputStream
-     *         An {@code InputStream} to read the settings from.
-     *
+     * @param inputStream An {@code InputStream} to read the settings from.
      * @return An {@link ImportContents} instance containing information about the contents of the
-     *         settings file.
-     *
-     * @throws SettingsImportExportException
-     *         In case of an error.
+     * settings file.
+     * @throws SettingsImportExportException In case of an error.
      */
     public static ImportContents getImportStreamContents(InputStream inputStream)
             throws SettingsImportExportException {
@@ -156,24 +168,17 @@ public class SettingsImporter {
      * Reads an import {@link InputStream} and imports the global settings and/or account
      * configurations specified by the arguments.
      *
-     * @param context
-     *         A {@link Context} instance.
-     * @param inputStream
-     *         The {@code InputStream} to read the settings from.
-     * @param globalSettings
-     *         {@code true} if global settings should be imported from the file.
-     * @param accountUuids
-     *         A list of UUIDs of the accounts that should be imported.
-     * @param overwrite
-     *         {@code true} if existing accounts should be overwritten when an account with the
-     *         same UUID is found in the settings file.<br>
-     *         <strong>Note:</strong> This can have side-effects we currently don't handle, e.g.
-     *         changing the account type from IMAP to POP3. So don't use this for now!
+     * @param context        A {@link Context} instance.
+     * @param inputStream    The {@code InputStream} to read the settings from.
+     * @param globalSettings {@code true} if global settings should be imported from the file.
+     * @param accountUuids   A list of UUIDs of the accounts that should be imported.
+     * @param overwrite      {@code true} if existing accounts should be overwritten when an account with the
+     *                       same UUID is found in the settings file.<br>
+     *                       <strong>Note:</strong> This can have side-effects we currently don't handle, e.g.
+     *                       changing the account type from IMAP to POP3. So don't use this for now!
      * @return An {@link ImportResults} instance containing information about errors and
-     *         successfully imported accounts.
-     *
-     * @throws SettingsImportExportException
-     *         In case of an error.
+     * successfully imported accounts.
+     * @throws SettingsImportExportException In case of an error.
      */
     public static ImportResults importSettings(Context context, InputStream inputStream, boolean globalSettings,
                                                List<String> accountUuids, boolean overwrite) throws SettingsImportExportException {
@@ -185,7 +190,7 @@ public class SettingsImporter {
 
             Imported imported = parseSettings(inputStream, globalSettings, accountUuids, false);
 
-            Preferences preferences = Preferences.getPreferences(context);
+            Preferences preferences = Preferences.getPreferences();
             Storage storage = preferences.getStorage();
 
             if (globalSettings) {
@@ -228,7 +233,7 @@ public class SettingsImporter {
                                         editor = preferences.createStorageEditor();
 
                                         String newUuid = importResult.imported.uuid;
-                                        String oldAccountUuids = storage.getString("accountUuids", "");
+                                        String oldAccountUuids = preferences.getStorage().getString("accountUuids", "");
                                         String newAccountUuids = (oldAccountUuids.length() > 0) ?
                                                 oldAccountUuids + "," + newUuid : newUuid;
 
@@ -266,11 +271,6 @@ public class SettingsImporter {
 
                     StorageEditor editor = preferences.createStorageEditor();
 
-                    String defaultAccountUuid = storage.getString("defaultAccountUuid", null);
-                    if (defaultAccountUuid == null) {
-                        putString(editor, "defaultAccountUuid", accountUuids.get(0));
-                    }
-
                     if (!editor.commit()) {
                         throw new SettingsImportExportException("Failed to set default account");
                     }
@@ -285,13 +285,12 @@ public class SettingsImporter {
 
             // Create special local folders
             for (AccountDescriptionPair importedAccount : importedAccounts) {
-                String accountUuid = importedAccount.imported.uuid;
-                Account account = preferences.getAccount(accountUuid);
+                String accountUuid = importedAccount.imported.uuid;Account account = preferences.getAccount(accountUuid);
 
                 localFoldersCreator.createSpecialLocalFolders(account);
             }
 
-            K9.loadPrefs(preferences);
+            DI.get(RealGeneralSettingsManager.class).loadSettings();
             Core.setServicesEnabled(context);
 
             return new ImportResults(globalSettingsImported, importedAccounts, erroneousAccounts);
@@ -304,7 +303,7 @@ public class SettingsImporter {
     }
 
     private static void importGlobalSettings(Storage storage, StorageEditor editor, int contentVersion,
-            ImportedSettings settings) {
+                                             ImportedSettings settings) {
 
         // Validate global settings
         Map<String, Object> validatedSettings = GeneralSettingsDescriptions.validate(contentVersion, settings.settings);
@@ -329,11 +328,11 @@ public class SettingsImporter {
     }
 
     private static AccountDescriptionPair importAccount(Context context, StorageEditor editor, int contentVersion,
-            ImportedAccount account, boolean overwrite) throws InvalidSettingValueException {
+                                                        ImportedAccount account, boolean overwrite) throws InvalidSettingValueException {
 
         AccountDescription original = new AccountDescription(account.name, account.uuid);
 
-        Preferences prefs = Preferences.getPreferences(context);
+        Preferences prefs = Preferences.getPreferences();
         List<Account> accounts = prefs.getAccounts();
 
         String uuid = account.uuid;
@@ -376,7 +375,10 @@ public class SettingsImporter {
 
         String incomingServerName = incoming.host;
         boolean incomingPasswordNeeded = AuthType.EXTERNAL != incoming.authenticationType &&
+                AuthType.XOAUTH2 != incoming.authenticationType &&
                 (incoming.password == null || incoming.password.isEmpty());
+
+        boolean authorizationNeeded = incoming.authenticationType == AuthType.XOAUTH2;
 
         String incomingServerType = ServerTypeConverter.toServerSettingsType(account.incoming.type);
         if (account.outgoing == null && !incomingServerType.equals(Protocols.WEBDAV)) {
@@ -394,20 +396,23 @@ public class SettingsImporter {
 
             /*
              * Mark account as disabled if the settings file contained a username but no password. However, no password
-             * is required for the outgoing server for WebDAV accounts, because incoming and outgoing servers are 
+             * is required for the outgoing server for WebDAV accounts, because incoming and outgoing servers are
              * identical for this account type. Nor is a password required if the AuthType is EXTERNAL.
              */
             String outgoingServerType = ServerTypeConverter.toServerSettingsType(outgoing.type);
             outgoingPasswordNeeded = AuthType.EXTERNAL != outgoing.authenticationType &&
+                    AuthType.XOAUTH2 != outgoing.authenticationType &&
                     !outgoingServerType.equals(Protocols.WEBDAV) &&
                     outgoing.username != null &&
                     !outgoing.username.isEmpty() &&
                     (outgoing.password == null || outgoing.password.isEmpty());
 
+            authorizationNeeded |= outgoing.authenticationType == AuthType.XOAUTH2;
+
             outgoingServerName = outgoing.host;
         }
 
-        boolean createAccountDisabled = incomingPasswordNeeded || outgoingPasswordNeeded;
+        boolean createAccountDisabled = incomingPasswordNeeded || outgoingPasswordNeeded || authorizationNeeded;
         if (createAccountDisabled) {
             editor.putBoolean(accountKeyPrefix + "enabled", false);
         }
@@ -461,15 +466,20 @@ public class SettingsImporter {
             }
         }
 
-        //TODO: sync folder settings with localstore?
+        // When deleting an account and then restoring it using settings import, the same account UUID will be used.
+        // To avoid reusing a previously existing notification channel ID, we need to make sure to use a unique value
+        // for `messagesNotificationChannelVersion`.
+        Clock clock = DI.get(Clock.class);
+        String messageNotificationChannelVersion = Long.toString(clock.getTime() / 1000);
+        putString(editor, accountKeyPrefix + "messagesNotificationChannelVersion", messageNotificationChannelVersion);
 
         AccountDescription imported = new AccountDescription(accountName, uuid);
-        return new AccountDescriptionPair(original, imported, mergeImportedAccount,
+        return new AccountDescriptionPair(original, imported, mergeImportedAccount, authorizationNeeded,
                 incomingPasswordNeeded, outgoingPasswordNeeded, incomingServerName, outgoingServerName);
     }
 
     private static void importFolder(StorageEditor editor, int contentVersion, String uuid, ImportedFolder folder,
-            boolean overwrite, Preferences prefs) {
+                                     boolean overwrite, Preferences prefs) {
 
         // Validate folder settings
         Map<String, Object> validatedSettings =
@@ -502,7 +512,7 @@ public class SettingsImporter {
     }
 
     private static void importIdentities(StorageEditor editor, int contentVersion, String uuid, ImportedAccount account,
-            boolean overwrite, Account existingAccount, Preferences prefs) throws InvalidSettingValueException {
+                                         boolean overwrite, Account existingAccount, Preferences prefs) throws InvalidSettingValueException {
 
         String accountKeyPrefix = uuid + ".";
 
@@ -601,7 +611,7 @@ public class SettingsImporter {
                 continue;
             }
 
-            if (account.getDescription().equals(name)) {
+            if (account.getDisplayName().equals(name)) {
                 return true;
             }
         }
@@ -632,12 +642,9 @@ public class SettingsImporter {
      * Write to an {@link SharedPreferences.Editor} while logging what is written if debug logging
      * is enabled.
      *
-     * @param editor
-     *         The {@code Editor} to write to.
-     * @param key
-     *         The name of the preference to modify.
-     * @param value
-     *         The new value for the preference.
+     * @param editor The {@code Editor} to write to.
+     * @param key    The name of the preference to modify.
+     * @param value  The new value for the preference.
      */
     private static void putString(StorageEditor editor, String key, String value) {
         if (K9.isDebugLoggingEnabled()) {
@@ -654,7 +661,7 @@ public class SettingsImporter {
 
     @VisibleForTesting
     static Imported parseSettings(InputStream inputStream, boolean globalSettings, List<String> accountUuids,
-            boolean overview) throws SettingsImportExportException {
+                                  boolean overview) throws SettingsImportExportException {
 
         if (!overview && accountUuids == null) {
             throw new IllegalArgumentException("Argument 'accountUuids' must not be null.");
@@ -707,7 +714,7 @@ public class SettingsImporter {
     }
 
     private static Imported parseRoot(XmlPullParser xpp, boolean globalSettings, List<String> accountUuids,
-            boolean overview) throws XmlPullParserException, IOException, SettingsImportExportException {
+                                      boolean overview) throws XmlPullParserException, IOException, SettingsImportExportException {
 
         Imported result = new Imported();
 
@@ -826,7 +833,7 @@ public class SettingsImporter {
     }
 
     private static Map<String, ImportedAccount> parseAccounts(XmlPullParser xpp, List<String> accountUuids,
-            boolean overview) throws XmlPullParserException, IOException {
+                                                              boolean overview) throws XmlPullParserException, IOException {
 
         Map<String, ImportedAccount> accounts = null;
 
@@ -1060,11 +1067,12 @@ public class SettingsImporter {
         String type = ServerTypeConverter.toServerSettingsType(importedServer.type);
         int port = convertPort(importedServer.port);
         ConnectionSecurity connectionSecurity = convertConnectionSecurity(importedServer.connectionSecurity);
+        String password = importedServer.authenticationType == AuthType.XOAUTH2 ? "" : importedServer.password;
         Map<String, String> extra = importedServer.extras != null ?
                 unmodifiableMap(importedServer.extras.settings) : emptyMap();
 
         return new ServerSettings(type, importedServer.host, port, connectionSecurity,
-                importedServer.authenticationType, importedServer.username, importedServer.password,
+                importedServer.authenticationType, importedServer.username, password,
                 importedServer.clientCertificateAlias, extra);
     }
 

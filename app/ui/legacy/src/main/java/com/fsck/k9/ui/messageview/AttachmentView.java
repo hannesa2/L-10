@@ -1,6 +1,7 @@
 package com.fsck.k9.ui.messageview;
 
 
+import android.app.Activity;
 import android.content.Context;
 import android.util.AttributeSet;
 import android.view.View;
@@ -13,6 +14,7 @@ import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.fsck.k9.K9;
 import com.fsck.k9.ui.R;
+import com.fsck.k9.ui.helper.ContextHelper;
 import com.fsck.k9.ui.helper.SizeFormatter;
 import com.fsck.k9.mailstore.AttachmentViewInfo;
 
@@ -23,6 +25,7 @@ public class AttachmentView extends FrameLayout implements OnClickListener {
     private AttachmentViewInfo attachment;
     private AttachmentViewCallback callback;
 
+    private View cardView;
     private View saveButton;
     private ImageView preview;
     private ImageView attachmentType;
@@ -44,6 +47,7 @@ public class AttachmentView extends FrameLayout implements OnClickListener {
     @Override
     protected void onFinishInflate() {
         super.onFinishInflate();
+        cardView = findViewById(R.id.attachment_card);
         saveButton = findViewById(R.id.save_button);
         preview = findViewById(R.id.attachment_preview);
         attachmentType = findViewById(R.id.attachment_type);
@@ -70,7 +74,7 @@ public class AttachmentView extends FrameLayout implements OnClickListener {
             saveButton.setVisibility(View.INVISIBLE);
         }
 
-        setOnClickListener(this);
+        cardView.setOnClickListener(this);
         saveButton.setOnClickListener(this);
 
         TextView attachmentName = findViewById(R.id.attachment_name);
@@ -100,7 +104,7 @@ public class AttachmentView extends FrameLayout implements OnClickListener {
 
     @Override
     public void onClick(View view) {
-        if (view == this) {
+        if (view.getId() == R.id.attachment_card) {
             onViewButtonClick();
         } else if (view.getId() == R.id.save_button) {
             onSaveButtonClick();
@@ -120,8 +124,15 @@ public class AttachmentView extends FrameLayout implements OnClickListener {
     }
 
     public void refreshThumbnail() {
+        Context context = getContext();
+        Activity activity = ContextHelper.findActivity(context);
+        if (activity != null && activity.isDestroyed()) {
+            // Do nothing because Glide would throw an exception
+            return;
+        }
+
         preview.setVisibility(View.VISIBLE);
-        Glide.with(getContext())
+        Glide.with(context)
                 .load(attachment.internalUri)
                 .centerCrop()
                 .diskCacheStrategy(DiskCacheStrategy.NONE)

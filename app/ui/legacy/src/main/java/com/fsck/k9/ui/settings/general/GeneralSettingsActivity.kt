@@ -16,7 +16,6 @@ import com.fsck.k9.ui.R
 import com.fsck.k9.ui.base.K9Activity
 import com.fsck.k9.ui.fragmentTransaction
 import com.fsck.k9.ui.fragmentTransactionWithBackStack
-import com.fsck.k9.ui.resolveColorAttribute
 
 class GeneralSettingsActivity : K9Activity(), OnPreferenceStartScreenCallback, SearchPreferenceResultListener {
     private lateinit var searchPreferenceActionView: SearchPreferenceActionView
@@ -63,8 +62,7 @@ class GeneralSettingsActivity : K9Activity(), OnPreferenceStartScreenCallback, S
             replace(R.id.generalSettingsContainer, fragment)
         }
 
-        val accentColor = theme.resolveColorAttribute(R.attr.colorAccent)
-        result.highlight(fragment as PreferenceFragmentCompat, accentColor)
+        result.highlight(fragment as PreferenceFragmentCompat)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -102,6 +100,9 @@ class GeneralSettingsActivity : K9Activity(), OnPreferenceStartScreenCallback, S
                 searchPreferenceMenuItem.expandActionView()
                 searchPreferenceActionView.setQuery(searchQuery, false)
             }
+            // searchEnabled should be set to false because it caused to expand the search view again
+            // when we click on any item after each rotation
+            searchEnabled = false
         }
         return true
     }

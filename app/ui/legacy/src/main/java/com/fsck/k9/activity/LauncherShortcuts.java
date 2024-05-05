@@ -13,6 +13,7 @@ public class LauncherShortcuts extends AccountList {
     @Override
     public void onCreate(Bundle icicle) {
         super.onCreate(icicle);
+        setTitle(R.string.shortcuts_title);
 
         // finish() immediately if we aren't supposed to be here
         if (!Intent.ACTION_CREATE_SHORTCUT.equals(getIntent().getAction())) {
@@ -32,11 +33,14 @@ public class LauncherShortcuts extends AccountList {
 
         Intent intent = new Intent();
         intent.putExtra(Intent.EXTRA_SHORTCUT_INTENT, shortcutIntent);
-        String description = account.getDescription();
-        if (description == null || description.isEmpty()) {
-            description = account.getEmail();
+        String accountName = account.getName();
+        String displayName;
+        if (accountName != null) {
+            displayName = accountName;
+        } else {
+            displayName = account.getEmail();
         }
-        intent.putExtra(Intent.EXTRA_SHORTCUT_NAME, description);
+        intent.putExtra(Intent.EXTRA_SHORTCUT_NAME, displayName);
         Parcelable iconResource = Intent.ShortcutIconResource.fromContext(this, R.mipmap.icon);
         intent.putExtra(Intent.EXTRA_SHORTCUT_ICON_RESOURCE, iconResource);
 

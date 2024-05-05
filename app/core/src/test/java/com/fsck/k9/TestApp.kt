@@ -1,6 +1,7 @@
 package com.fsck.k9
 
 import android.app.Application
+import androidx.work.WorkManager
 import com.fsck.k9.backend.BackendManager
 import com.fsck.k9.controller.ControllerExtension
 import com.fsck.k9.crypto.EncryptionExtractor
@@ -16,7 +17,7 @@ import org.mockito.kotlin.mock
 
 class TestApp : Application() {
     override fun onCreate() {
-        Core.earlyInit(this)
+        Core.earlyInit()
 
         super.onCreate()
         DI.start(this, coreModules + storageModule + testModule)
@@ -36,4 +37,5 @@ val testModule = module {
     single { mock<NotificationActionCreator>() }
     single { mock<NotificationStrategy>() }
     single(named("controllerExtensions")) { emptyList<ControllerExtension>() }
+    single { mock<WorkManager>() }
 }

@@ -2,9 +2,9 @@ package com.fsck.k9.storage.messages
 
 import androidx.core.database.getLongOrNull
 import com.fsck.k9.K9
+import com.fsck.k9.helper.mapToSet
 import com.fsck.k9.mail.Flag
 import com.fsck.k9.mail.Header
-import com.fsck.k9.mail.MessagingException
 import com.fsck.k9.mail.internet.MimeHeader
 import com.fsck.k9.mail.message.MessageHeaderParser
 import com.fsck.k9.mailstore.LockableDatabase
@@ -13,19 +13,21 @@ import java.util.Date
 
 internal class RetrieveMessageOperations(private val lockableDatabase: LockableDatabase) {
 
-    fun getMessageServerId(messageId: Long): String {
+    fun getMessageServerId(messageId: Long): String? {
         return lockableDatabase.execute(false) { database ->
             database.query(
                 "messages",
                 arrayOf("uid"),
                 "id = ?",
                 arrayOf(messageId.toString()),
-                null, null, null
+                null,
+                null,
+                null
             ).use { cursor ->
                 if (cursor.moveToFirst()) {
                     cursor.getString(0)
                 } else {
-                    throw MessagingException("Message [ID: $messageId] not found in database")
+                    null
                 }
             }
         }
@@ -168,39 +170,27 @@ internal class RetrieveMessageOperations(private val lockableDatabase: LockableD
         }
     }
 
-    fun getHeaders(folderId: Long, messageServerId: String): List<Header> {
+    fun getHeaders(folderId: Long, messageServerId: String, headerNames: Set<String>? = null): List<Header> {
         return lockableDatabase.execute(false) { database ->
             database.rawQuery(
                 "SELECT message_parts.header FROM messages" +
                     " LEFT JOIN message_parts ON (messages.message_part_id = message_parts.id)" +
                     " WHERE messages.folder_id = ? AND messages.uid = ?",
-                arrayOf(folderId.toString(), messageServerId),
+                arrayOf(folderId.toString(), messageServerId)
             ).use { cursor ->
                 if (!cursor.moveToFirst()) throw MessageNotFoundException(folderId, messageServerId)
 
                 val headerBytes = cursor.getBlob(0)
+                val lowercaseHeaderNames = headerNames?.mapToSet(headerNames.size) { it.lowercase() }
 
                 val header = MimeHeader()
                 MessageHeaderParser.parse(headerBytes.inputStream()) { name, value ->
-                    header.addRawHeader(name, value)
+                    if (lowercaseHeaderNames == null || name.lowercase() in lowercaseHeaderNames) {
+                        header.addRawHeader(name, value)
+                    }
                 }
 
                 header.headers
-            }
-        }
-    }
-
-    fun getLastUid(folderId: Long): Long? {
-        return lockableDatabase.execute(false) { database ->
-            database.rawQuery(
-                "SELECT MAX(uid) FROM messages WHERE folder_id = ?",
-                arrayOf(folderId.toString())
-            ).use { cursor ->
-                if (cursor.moveToFirst()) {
-                    cursor.getLongOrNull(0)
-                } else {
-                    null
-                }
             }
         }
     }
